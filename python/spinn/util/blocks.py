@@ -217,8 +217,8 @@ class LayerNormalization(nn.Module):
 
     def forward(self, input, dummy=None):
         if dummy is None:
-            dummy = torch.zeros(input.size(0))# .cuda()
-            dummy_var = torch.ones(input.size(0))# .cuda() # These may need to be Variables
+            dummy = torch.zeros(input.size(0)).cuda()
+            dummy_var = torch.ones(input.size(0)).cuda() # These may need to be Variables
 
         x = input.transpose(0,1).contiguous()
         x = F.batch_norm(x,running_mean=dummy,running_var=dummy,weight=None,bias=None,training=True, momentum=0.1,eps=1e-5)
