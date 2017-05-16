@@ -211,38 +211,38 @@ def lstm(c_prev, x):
     return c, h
 
 
-class LayerNormalization(nn.Module):
-    def __init__(self, _):
-        super(LayerNormalization, self).__init__()
-
-    def forward(self, input, dummy=None):
-        if dummy is None:
-            dummy = torch.zeros(input.size(0)).cuda()
-            dummy_var = torch.ones(input.size(0)).cuda() # These may need to be Variables
-
-        x = input.transpose(0,1).contiguous()
-        x = F.batch_norm(x,running_mean=dummy,running_var=dummy,weight=None,bias=None,training=True, momentum=0.1,eps=1e-5)
-        return x.transpose(0,1)
-
 # class LayerNormalization(nn.Module):
-#     # From: https://discuss.pytorch.org/t/lstm-with-layer-normalization/2150
+#    def __init__(self, _):
+#        super(LayerNormalization, self).__init__()
 # 
-#     def __init__(self, hidden_size, eps=1e-5):
-#         super(LayerNormalization, self).__init__()
-#         
-#         self.eps = eps
-#         self.hidden_size = hidden_size
-#         self.a2 = nn.Parameter(torch.ones(1, hidden_size), requires_grad=True)
-#         self.b2 = nn.Parameter(torch.zeros(1, hidden_size), requires_grad=True)
-#         
-#     def forward(self, z):
-#         mu = torch.mean(z)
-#         sigma = torch.std(z)
+#     def forward(self, input, dummy=None):
+#         if dummy is None:
+#             dummy = torch.zeros(input.size(0)).cuda()
+#             dummy_var = torch.ones(input.size(0)).cuda() # These may need to be Variables
 # 
-#         ln_out = (z - mu.expand_as(z)) / (sigma.expand_as(z) + self.eps)
-# 
-#         ln_out = ln_out * self.a2.expand_as(ln_out) + self.b2.expand_as(ln_out)
-#         return ln_out
+#         x = input.transpose(0,1).contiguous()
+#         x = F.batch_norm(x,running_mean=dummy,running_var=dummy,weight=None,bias=None,training=True, momentum=0.1,eps=1e-5)
+#         return x.transpose(0,1)
+
+class LayerNormalization(nn.Module):
+    # From: https://discuss.pytorch.org/t/lstm-with-layer-normalization/2150
+
+    def __init__(self, hidden_size, eps=1e-5):
+        super(LayerNormalization, self).__init__()
+        
+        self.eps = eps
+        # self.hidden_size = hidden_size
+        # self.a2 = nn.Parameter(torch.ones(1, hidden_size), requires_grad=True)
+        # self.b2 = nn.Parameter(torch.zeros(1, hidden_size), requires_grad=True)
+        
+    def forward(self, z):
+        mu = torch.mean(z)
+        sigma = torch.std(z)
+
+        ln_out = (z - mu.expand_as(z)) / (sigma.expand_as(z) + self.eps)
+
+        # ln_out = ln_out * self.a2.expand_as(ln_out) + self.b2.expand_as(ln_out)
+        return ln_out
 
 
 class ReduceTreeGRU(nn.Module):
