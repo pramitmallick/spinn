@@ -607,6 +607,7 @@ class BaseModel(nn.Module):
         b, l = example.tokens.size()[:2]
 
         embeds = self.embed(example.tokens)
+        print embeds
         embeds = self.reshape_input(embeds, b, l)
         embeds = self.encode(embeds)
         embeds = self.reshape_context(embeds, b, l)
@@ -617,12 +618,14 @@ class BaseModel(nn.Module):
         # _embeds = torch.chunk(to_cpu(embeds), b, 0)
         # _embeds = [torch.chunk(x, l, 0) for x in _embeds]
         # buffers = [list(reversed(x)) for x in _embeds]
+        print embeds
         ee = torch.chunk(embeds, b * l, 0)[::-1]
         bb = []
         for ii in range(b):
             ex = list(ee[ii * l:(ii + 1) * l])
             bb.append(ex)
         buffers = bb[::-1]
+        print buffers
 
         example.bufs = buffers
 
