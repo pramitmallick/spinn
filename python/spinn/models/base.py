@@ -474,11 +474,12 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
                         num_classes, FLAGS, context_args, composition_args)
 
     # Build optimizer.
+    params_to_optimize = filter(lambda p: p.requires_grad, model.parameters())
     if FLAGS.optimizer_type == "Adam":
-        optimizer = optim.Adam(model.parameters(), lr=FLAGS.learning_rate,
+        optimizer = optim.Adam(params_to_optimize, lr=FLAGS.learning_rate,
                                betas=(0.9, 0.999), eps=1e-08)
     elif FLAGS.optimizer_type == "RMSprop":
-        optimizer = optim.RMSprop(model.parameters(), lr=FLAGS.learning_rate, eps=1e-08)
+        optimizer = optim.RMSprop(params_to_optimize, lr=FLAGS.learning_rate, eps=1e-08)
     else:
         raise NotImplementedError
 

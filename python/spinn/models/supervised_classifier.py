@@ -3,6 +3,7 @@ import json
 import random
 import sys
 import time
+import cProfile
 
 import gflags
 import numpy as np
@@ -391,4 +392,4 @@ if __name__ == '__main__':
         raise Exception(
             "Please use rl_classifier.py instead of supervised_classifier.py for RLSPINN.")
 
-    run(only_forward=FLAGS.expanded_eval_only_mode)
+    cProfile.run('run(only_forward=FLAGS.expanded_eval_only_mode)')

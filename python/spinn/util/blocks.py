@@ -368,18 +368,13 @@ class ModelTrainer(object):
 class Embed(nn.Module):
     def __init__(self, size, vocab_size, vectors):
         super(Embed, self).__init__()
-        if vectors is None:
-            self.embed = nn.Embedding(vocab_size, size)
-        self.vectors = vectors
+        self.embed = nn.Embedding(vocab_size, size)
+        if vectors is not None:
+            self.embed.weight = nn.Parameter(torch.FloatTensor(vectors))
+            self.embed.weight.requires_grad = False
 
     def forward(self, tokens):
-        if self.vectors is None:
-            embeds = self.embed(tokens.contiguous().view(-1).long())
-        else:
-            embeds = self.vectors.take(tokens.data.cpu().numpy().ravel(), axis=0)
-            embeds = to_gpu(Variable(torch.from_numpy(embeds), volatile=tokens.volatile))
-
-        return embeds
+        return self.embed(tokens.contiguous().view(-1).long())
 
 
 class GRU(nn.Module):
