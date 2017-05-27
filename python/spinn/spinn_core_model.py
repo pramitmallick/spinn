@@ -632,7 +632,7 @@ class BaseModel(nn.Module):
         ee = ee[::-1]
         bb = []
         for ii in range(b):
-            ex = list([ee[iii].cuda() for iii in range(ii * l,(ii + 1) * l)]
+            ex = list([ee[iii].cuda() for iii in range(ii * l,(ii + 1) * l)])
             bb.append(ex)
         buffers = bb[::-1]
 
