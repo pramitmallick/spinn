@@ -645,8 +645,6 @@ class BaseModel(nn.Module):
 
         self.output_hook(output, sentences, transitions, y_batch)
 
-        print output[0,0]
-
         return output
 
     # --- Sentence Style Switches ---
