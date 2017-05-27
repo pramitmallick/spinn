@@ -619,7 +619,7 @@ class BaseModel(nn.Module):
         embeds = self.encode(embeds)
         embeds = self.reshape_context(embeds, b, l)
         self.forward_hook(embeds, b, l)
-        embeds = F.dropout(embeds, self.embedding_dropout_rate, training=self.training)
+        embeds = F.dropout(embeds, self.embedding_dropout_rate, training=self.training).cpu()
 
         print "to emb", time.time() - start
 
@@ -629,12 +629,10 @@ class BaseModel(nn.Module):
         # buffers = [list(reversed(x)) for x in _embeds]
 
         ee = torch.chunk(embeds, b * l, 0)
-        print len(ee)
         ee = ee[::-1]
-        print len(ee)
         bb = []
         for ii in range(b):
-            ex = list(ee[ii * l:(ii + 1) * l])
+            ex = list([ee[iii].cuda() for iii in range(ii * l,(ii + 1) * l)]
             bb.append(ex)
         buffers = bb[::-1]
 
