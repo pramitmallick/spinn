@@ -215,9 +215,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         total_loss += aux_loss
         # Backward pass.
 
-        start = time.time()
         total_loss.backward()
-        print "backprop", time.time() - start
 
         # Hard Gradient Clipping
         clip = FLAGS.clipping_max_value

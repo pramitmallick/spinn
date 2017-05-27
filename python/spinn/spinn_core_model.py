@@ -602,26 +602,18 @@ class BaseModel(nn.Module):
 
     def forward(self, sentences, transitions, y_batch=None,
                 use_internal_parser=False, validate_transitions=True):
-        start = time.time()
-
 
         example = self.unwrap(sentences, transitions)
-
-        print "to unwrap", time.time() - start
 
         b, l = example.tokens.size()[:2]
 
         embeds = self.embed(example.tokens)
-
-        print "to lookup", time.time() - start
 
         embeds = self.reshape_input(embeds, b, l)
         embeds = self.encode(embeds)
         embeds = self.reshape_context(embeds, b, l)
         self.forward_hook(embeds, b, l)
         embeds = F.dropout(embeds, self.embedding_dropout_rate, training=self.training)
-
-        print "to emb", time.time() - start
 
         # Make Buffers
         # _embeds = torch.chunk(to_cpu(embeds), b, 0)
@@ -638,8 +630,6 @@ class BaseModel(nn.Module):
 
         example.bufs = buffers
 
-        print "to build buffers", time.time() - start
-
         h, transition_acc, transition_loss = self.run_spinn(
             example, use_internal_parser, validate_transitions)
 
@@ -648,22 +638,14 @@ class BaseModel(nn.Module):
         self.transition_acc = transition_acc
         self.transition_loss = transition_loss
 
-        print "to run SPINN", time.time() - start
-
         # Build features
         features = self.build_features(h)
 
         output = self.mlp(features)
 
-        print "to run MLP", time.time() - start
-
         self.output_hook(output, sentences, transitions, y_batch)
 
-        print "to output hook", time.time() - start
-
         print output[0,0]
-
-        print "to print", time.time() - start
 
         return output
 
