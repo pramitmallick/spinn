@@ -126,7 +126,7 @@ class LSTMState:
     def both(self):
         if not hasattr(self, '_both'):
             self._both = torch.cat(
-                (to_cpu(self._c), to_cpu(self._h.to_cpu())), 1)
+                (to_cpu(self._c), to_cpu(self._h), 1)
         return self._both
 
 
