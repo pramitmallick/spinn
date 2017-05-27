@@ -16,7 +16,7 @@ from spinn.util.blocks import HeKaimingInitializer
 from spinn.util.catalan import ShiftProbabilities
 
 from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
-
+import time
 
 def build_model(data_manager, initial_embeddings, vocab_size,
                 num_classes, FLAGS, context_args, composition_args):
@@ -602,22 +602,36 @@ class BaseModel(nn.Module):
 
     def forward(self, sentences, transitions, y_batch=None,
                 use_internal_parser=False, validate_transitions=True):
+        start = time.time()
+
+
         example = self.unwrap(sentences, transitions)
+
+        print "to unwrap", time.time() - start
 
         b, l = example.tokens.size()[:2]
 
         embeds = self.embed(example.tokens)
+
+        print "to lookup", time.time() - start
+
         embeds = self.reshape_input(embeds, b, l)
         embeds = self.encode(embeds)
         embeds = self.reshape_context(embeds, b, l)
         self.forward_hook(embeds, b, l)
         embeds = F.dropout(embeds, self.embedding_dropout_rate, training=self.training)
 
+        print "to emb", time.time() - start
+
         # Make Buffers
         # _embeds = torch.chunk(to_cpu(embeds), b, 0)
         # _embeds = [torch.chunk(x, l, 0) for x in _embeds]
         # buffers = [list(reversed(x)) for x in _embeds]
-        ee = torch.chunk(embeds, b * l, 0)[::-1]
+
+        ee = torch.chunk(embeds, b * l, 0)
+        print len(ee)
+        ee = ee[::-1]
+        print len(ee)
         bb = []
         for ii in range(b):
             ex = list(ee[ii * l:(ii + 1) * l])
@@ -625,6 +639,8 @@ class BaseModel(nn.Module):
         buffers = bb[::-1]
 
         example.bufs = buffers
+
+        print "to build buffers", time.time() - start
 
         h, transition_acc, transition_loss = self.run_spinn(
             example, use_internal_parser, validate_transitions)
@@ -634,12 +650,22 @@ class BaseModel(nn.Module):
         self.transition_acc = transition_acc
         self.transition_loss = transition_loss
 
+        print "to run SPINN", time.time() - start
+
         # Build features
         features = self.build_features(h)
 
         output = self.mlp(features)
 
+        print "to run MLP", time.time() - start
+
         self.output_hook(output, sentences, transitions, y_batch)
+
+        print "to output hook", time.time() - start
+
+        print output[0,0]
+
+        print "to print", time.time() - start
 
         return output
 
