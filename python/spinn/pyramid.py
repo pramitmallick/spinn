@@ -156,7 +156,7 @@ class Pyramid(nn.Module):
         else:
             # Greedy prediction
             preds = torch.max(selection_probs, 1)[1].numpy()
-        return selection_logits, preds
+        return preds
 
     def run_hard_pyramid(self, x, show_sample=False):
         batch_size, seq_len, model_dim = x.data.size()
@@ -327,12 +327,8 @@ class Pyramid(nn.Module):
             advantage = (advantage - advantage.mean()) / \
                 (advantage.std() + 1e-8)
 
-        return {
-            # Result of the MLP operation.
-            'output': output,
-            # Assign REINFORCE output.
-            'policy_loss': self.reinforce(advantage, pyramid_out['logits'])
-        }
+        self.policy_loss = self.reinforce(advantage, pyramid_out['logits'])
+        return output
 
     def build_reward(self, probs, target, rl_reward="standard"):
         if rl_reward == "standard":  # Zero One Loss.
@@ -391,13 +387,10 @@ class Pyramid(nn.Module):
         # advantage[batch_position]
 
         log_p_action = torch.cat([
-            torch.cat([
-                selected_logits_per_layer[b][l]
-                for l in range(len(selected_logits_per_layer))
-            ], 1)
+            torch.stack(selected_logits_per_layer[b], 1)
             for b in range(batch_size)
         ], 0) # B x (S - 1)
-        assert logits_matrix.size(0) == batch_size
+        assert log_p_action.size(0) == batch_size
 
         if self.use_sentence_pair:
             # TODO: reimplement
@@ -421,7 +414,6 @@ class Pyramid(nn.Module):
         policy_loss /= log_p_action.size(0)
         policy_loss *= self.rl_weight
 
-        self.policy_loss = policy_loss
         return policy_loss
 
     def get_features_dim(self):
