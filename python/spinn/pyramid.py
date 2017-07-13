@@ -125,28 +125,57 @@ class Pyramid(nn.Module):
         else:
             self.merge_sequence_memory = None
 
+        def recompute_selection_logits(to_recompute):
+            "Recompute logits at certain locations in the (batch size) x (sequences length) matrix.
+            The input is a list of pairs, each pair being:
+                0: the batch position (which sentence in the batch)
+                1: the position in the sentence (which word in the sentence). The smaller index is used.
+                e.g. 'rescore words 3 and 4 in sentence 6' -> (6, 3)"
+            left = torch.squeeze(
+                torch.cat([unbatched_state_pairs[batch_pos][merge_pos][:, :, self.model_dim / 2:] for batch_pos, merge_pos in to_recompute], 0))
+            right = torch.squeeze(
+                torch.cat([unbatched_state_pairs[batch_pos][merge_pos + 1][:, :, self.model_dim / 2:] for batch_pos, merge_pos in to_recompute], 0))
+            selection_input = torch.cat([left, right], 1)
+            selection_logit = self.selection_fn(selection_input)
+            split_selection_logit = torch.chunk(selection_logit, len(to_recompute), 0)
+            assert len(to_recompute) == len(split_selection_logit), 'not all to_recompute inputs get a result'
+            return split_selection_logit
+
         # Most activations won't change between steps, so this can be preserved
         # and updated only when needed.
         unbatched_selection_logits_list = [[] for _ in range(batch_size)]
         for position in range(seq_len - 1):
-            left = torch.squeeze(
-                torch.cat([unbatched_state_pairs[b][position][:, :, self.model_dim / 2:] for b in range(batch_size)], 0))
-            right = torch.squeeze(
-                torch.cat([unbatched_state_pairs[b][position + 1][:, :, self.model_dim / 2:] for b in range(batch_size)], 0))
-            selection_input = torch.cat([left, right], 1)
-            selection_logit = self.selection_fn(selection_input)
-            split_selection_logit = torch.chunk(selection_logit, batch_size, 0)
+            to_recompute = [(b, position) for b in range(batch_size)]
+            split_selection_logit = recompute_selection_logits(to_recompute)
             for b in range(batch_size):
+                # Keep as Variables so they can update parameters via RL later.
                 unbatched_selection_logits_list[b].append(
-                    split_selection_logit[b].data.cpu().numpy())
+                    split_selection_logit[b])
+        assert len(unbatched_selection_logits_list) == batch_size
+        for sublist in unbatched_selection_logits_list:
+            assert len(sublist) == seq_len - 1
+
+        # unbatched_selection_logits_list[batch_position][sentence_position]
+        # Each entry is a 1x1 Variable. Variables contain raw output of
+        # selection network, pre-softmax.
+
+        # Combine this with advantage to do RL.
+        # Each sublist should be the same size (B)
+        selected_logits_per_layer = [] # [layer][batch_position]
 
         for layer in range(seq_len - 1, 0, -1):
-            selection_logits_list = [
-                np.concatenate([unbatched_selection_logits_list[b][i]
-                                for i in range(layer)], axis=1)
-                for b in range(batch_size)]
-            selection_logits = np.concatenate(selection_logits_list, axis=0)
-            merge_indices = np.argmax(selection_logits, axis=1)
+            # SLL: B arrays of size S
+            # Doing softmax prevents logits from exploding
+            selection_logits = F.log_softmax(torch.cat([
+                torch.cat([unbatched_selection_logits_list[b][i]
+                                for i in range(layer)], 1)
+                for b in range(batch_size)], 0))
+            merge_indices = torch.max(selection_logits, 1)[1].data.cpu()
+
+            # Remember chosen logits so they can be reinforced later on.
+            selected_logits_per_layer.append([
+                unbatched_selection_logits_list[b][merge_indices[b]]
+                    for b in range(batch_size)])
 
             if show_sample:
                 self.merge_sequence_memory.append(merge_indices[8])
@@ -170,8 +199,8 @@ class Pyramid(nn.Module):
             # Recompute invalidated selection logits in one big batch:
             # This is organized this way as the amount that needs to recompute depends
             # on the number of merges that were at the edge of the pyramid structure.
-            # TODO: Simplify by using this same code to compute the initial logits.
             if layer > 1:
+                # Each item is a pair (batch_position, merge_position)
                 to_recompute = []
                 for b in range(batch_size):
                     del unbatched_selection_logits_list[b][merge_indices[b]]
@@ -179,95 +208,16 @@ class Pyramid(nn.Module):
                         to_recompute.append((b, merge_indices[b] - 1))
                     if merge_indices[b] < len(unbatched_selection_logits_list[b]):
                         to_recompute.append((b, merge_indices[b]))
-                left = torch.squeeze(
-                    torch.cat([unbatched_state_pairs[index_pair[0]][index_pair[1]][:, :, self.model_dim / 2:] for index_pair in to_recompute], 0))
-                right = torch.squeeze(
-                    torch.cat([unbatched_state_pairs[index_pair[0]][index_pair[1] + 1][:, :, self.model_dim / 2:] for index_pair in to_recompute], 0))
-                selection_input = torch.cat([left, right], 1)
-                selection_logit = self.selection_fn(selection_input)
-                split_selection_logit = torch.chunk(selection_logit, len(to_recompute), 0)
+                split_selection_logit = recompute_selection_logits(to_recompute)
                 for i in range(len(to_recompute)):
-                    index_pair = to_recompute[i]
+                    batch_pos, merge_pos = to_recompute[i]
                     unbatched_selection_logits_list[index_pair[0]][index_pair[1]] = \
-                        split_selection_logit[i].data.cpu().numpy()
+                        split_selection_logit[i]
 
+        for sublist in unbatched_selection_logits_list:
+            assert len(sublist) == 1
         return torch.squeeze(
             torch.cat([unbatched_state_pairs[b][0][:, :, self.model_dim / 2:] for b in range(batch_size)], 0))
-
-    def run_pyramid(self, x, show_sample=False, indices=None, temperature_multiplier=1.0):
-        batch_size, seq_len, model_dim = x.data.size()
-
-        all_state_pairs = []
-        all_state_pairs.append(torch.chunk(x, seq_len, 1))
-
-        if show_sample:
-            self.merge_sequence_memory = []
-        else:
-            self.merge_sequence_memory = None
-
-        temperature = temperature_multiplier
-        if self.trainable_temperature:
-            temperature *= self.temperature
-        if not self.training:
-            temperature *= \
-                self.test_temperature_multiplier
-
-        if not isinstance(temperature, float):
-            self.temperature_to_display = float(temperature.data.cpu().numpy())
-        else:
-            self.temperature_to_display = temperature
-
-        for layer in range(seq_len - 1, 0, -1):
-            composition_results = []
-            selection_logits_list = [] 
-
-            for position in range(layer):
-                left = torch.squeeze(all_state_pairs[-1][position])
-                right = torch.squeeze(all_state_pairs[-1][position + 1])
-                composition_results.append(self.composition_fn(left, right))
-                selection_input = torch.cat([left[:, self.model_dim / 2:], right[:, self.model_dim / 2:]], 1)
-                selection_logit = self.selection_fn(selection_input)
-                selection_logits_list.append(selection_logit)
-
-            selection_logits = torch.cat(selection_logits_list, 1)
-
-            local_temperature = temperature
-            if not isinstance(local_temperature, float):
-                local_temperature = local_temperature.expand_as(selection_logits)
-
-            if self.training and self.gumbel:
-                selection_probs = gumbel_sample(selection_logits, local_temperature)
-            else:
-                # Plain softmax
-                selection_logits = selection_logits / local_temperature
-                selection_probs = F.softmax(selection_logits)
-
-            if show_sample:
-                merge_index = np.argmax(selection_probs[8, :].data.cpu().numpy())
-                self.merge_sequence_memory.append(merge_index)
-
-            layer_state_pairs = []
-            for position in range(layer):
-                if position < (layer - 1):
-                    copy_left = torch.sum(selection_probs[:, position + 1:], 1)
-                else:
-                    copy_left = to_gpu(Variable(torch.zeros(1, 1)))
-                if position > 0:
-                    copy_right = torch.sum(selection_probs[:, :position], 1)
-                else:
-                    copy_right = to_gpu(Variable(torch.zeros(1, 1)))
-                select = selection_probs[:, position]
-
-                left = torch.squeeze(all_state_pairs[-1][position])
-                right = torch.squeeze(all_state_pairs[-1][position + 1])
-                composition_result = composition_results[position]
-                new_state_pair = copy_left.expand_as(left) * left \
-                    + copy_right.expand_as(right) * right \
-                    + select.unsqueeze(1).expand_as(composition_result) * composition_result
-                layer_state_pairs.append(new_state_pair)
-            all_state_pairs.append(layer_state_pairs)
-
-        return all_state_pairs[-1][-1][:, self.model_dim / 2:]
 
     def run_embed(self, x):
         batch_size, seq_length = x.size()
@@ -289,16 +239,43 @@ class Pyramid(nn.Module):
         x = self.unwrap(sentences, transitions)
         emb = self.run_embed(x)
 
-        if self.test_temperature_multiplier == 0.0 and not self.training:
-            hh = self.run_hard_pyramid(emb, show_sample)
-        else:
-            hh = self.run_pyramid(emb, show_sample,
-                                  temperature_multiplier=pyramid_temperature_multiplier)
+        hh = self.run_hard_pyramid(emb, show_sample)
 
         h = self.wrap(hh)
         output = self.mlp(self.build_features(h))
 
-        return output
+        # From output_hook of rl_spinn
+        if not self.training:
+            return {
+                'output': output
+            }
+
+        probs = F.softmax(output).data.cpu()
+        target = torch.from_numpy(y_batch).long()
+
+        # Get Reward.
+        # TODO: reimplement transition_acc_as_reward
+        rewards = self.build_reward(probs, target, rl_reward=self.rl_reward)
+
+        # Get Baseline.
+        baseline = self.build_baseline(
+            rewards, sentences, transitions, y_batch)
+
+        # Calculate advantage.
+        advantage = rewards - baseline
+
+        # Whiten advantage. This is also called Variance Normalization.
+        if self.rl_whiten:
+            advantage = (advantage - advantage.mean()) / \
+                (advantage.std() + 1e-8)
+
+        # Assign REINFORCE output.
+        self.policy_loss = self.reinforce(advantage)
+
+        return {
+            'output': output,
+            'policy_loss': self.reinforce(advantage)
+        }
 
     def get_features_dim(self):
         features_dim = self.model_dim if self.use_sentence_pair else self.model_dim / 2
