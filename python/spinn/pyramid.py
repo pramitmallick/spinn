@@ -8,7 +8,7 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 
 from spinn.util.blocks import Embed, to_gpu, MLP, Linear, HeKaimingInitializer, gumbel_sample
-from spinn.util.misc import Args, Vocab
+from spinn.util.misc import Args, Vocab, GenericClass
 from spinn.util.blocks import SimpleTreeLSTM
 from spinn.util.sparks import sparks
 
@@ -38,6 +38,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      selection_dim=FLAGS.pyramid_selection_dim,
                      gumbel=FLAGS.pyramid_gumbel,
                      rl_mu=FLAGS.rl_mu,
+                     rl_epsilon=FLAGS.rl_epsilon,
                      rl_baseline=FLAGS.rl_baseline,
                      rl_reward=FLAGS.rl_reward,
                      rl_weight=FLAGS.rl_weight,
@@ -69,6 +70,7 @@ class Pyramid(nn.Module):
                  selection_dim=None,
                  gumbel=None,
                  rl_mu=None,
+                 rl_epsilon=None,
                  rl_baseline='greedy',
                  rl_reward='standard',
                  rl_weight=None,
@@ -133,7 +135,9 @@ class Pyramid(nn.Module):
         self.rl_whiten = rl_whiten
         self.rl_entropy = rl_entropy
         self.rl_entropy_beta = rl_entropy_beta
-        self.rl_temperature = 1.0
+        self.spinn = GenericClass( # hack!
+                temperature=1.0,
+                epsilon=rl_epsilon)
 
         if self.rl_baseline == "value":
             # TODO: Flag-ify constants. 1024D MLP likely too big.
@@ -148,7 +152,7 @@ class Pyramid(nn.Module):
 
     def predict_actions(self, selection_logits):
         # logits: 
-        selection_logits = (selection_logits / max(self.rl_temperature, 1e-8))
+        selection_logits = (selection_logits / max(self.spinn.temperature, 1e-8))
         selection_probs = selection_logits.exp().data.cpu()
 
         if self.training:

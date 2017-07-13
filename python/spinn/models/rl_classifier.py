@@ -269,16 +269,16 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
                   use_internal_parser=FLAGS.use_internal_parser,
                   validate_transitions=FLAGS.validate_transitions
                   )
-            tr_transitions_per_example, tr_strength = model.spinn.get_transitions_per_example(
-            )
+            # tr_transitions_per_example, tr_strength = model.spinn.get_transitions_per_example(
+            # )
 
             model.eval()
             model(X_batch, transitions_batch, y_batch,
                   use_internal_parser=FLAGS.use_internal_parser,
                   validate_transitions=FLAGS.validate_transitions
                   )
-            ev_transitions_per_example, ev_strength = model.spinn.get_transitions_per_example(
-            )
+            # ev_transitions_per_example, ev_strength = model.spinn.get_transitions_per_example(
+            # )
 
             if model.use_sentence_pair and len(transitions_batch.shape) == 3:
                 transitions_batch = np.concatenate([
@@ -286,26 +286,26 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
 
             # This could be done prior to running the batch for a tiny speed
             # boost.
-            t_idxs = range(FLAGS.num_samples)
-            random.shuffle(t_idxs)
-            t_idxs = sorted(t_idxs[:FLAGS.num_samples])
-            for t_idx in t_idxs:
-                log = log_entry.rl_sampling.add()
-                gold = transitions_batch[t_idx]
-                pred_tr = tr_transitions_per_example[t_idx]
-                pred_ev = ev_transitions_per_example[t_idx]
-                strength_tr = sparks(
-                    [1] + tr_strength[t_idx].tolist(), dec_str)
-                strength_ev = sparks(
-                    [1] + ev_strength[t_idx].tolist(), dec_str)
-                _, crossing = evalb.crossing(gold, pred)
-                log.t_idx = t_idx
-                log.crossing = crossing
-                log.gold_lb = "".join(map(str, gold))
-                log.pred_tr = "".join(map(str, pred_tr))
-                log.pred_ev = "".join(map(str, pred_ev))
-                log.strg_tr = strength_tr[1:].encode('utf-8')
-                log.strg_ev = strength_ev[1:].encode('utf-8')
+            # t_idxs = range(FLAGS.num_samples)
+            # random.shuffle(t_idxs)
+            # t_idxs = sorted(t_idxs[:FLAGS.num_samples])
+            # for t_idx in t_idxs:
+            #     log = log_entry.rl_sampling.add()
+            #     gold = transitions_batch[t_idx]
+            #     pred_tr = tr_transitions_per_example[t_idx]
+            #     pred_ev = ev_transitions_per_example[t_idx]
+            #     strength_tr = sparks(
+            #         [1] + tr_strength[t_idx].tolist(), dec_str)
+            #     strength_ev = sparks(
+            #         [1] + ev_strength[t_idx].tolist(), dec_str)
+            #     _, crossing = evalb.crossing(gold, pred)
+            #     log.t_idx = t_idx
+            #     log.crossing = crossing
+            #     log.gold_lb = "".join(map(str, gold))
+            #     log.pred_tr = "".join(map(str, pred_tr))
+            #     log.pred_ev = "".join(map(str, pred_ev))
+            #     log.strg_tr = strength_tr[1:].encode('utf-8')
+            #     log.strg_ev = strength_ev[1:].encode('utf-8')
 
         if step > 0 and step % FLAGS.eval_interval_steps == 0:
             should_log = True
