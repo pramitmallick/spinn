@@ -156,26 +156,30 @@ class Pyramid(nn.Module):
             assert len(sublist) == seq_len - 1
 
         # unbatched_selection_logits_list[batch_position][sentence_position]
-        # Each entry is a 1x1 Variable. Variables contain raw output of
-        # selection network, pre-softmax.
+        # Each entry is a Variable with a single value but many dimensions.
+        # Variables contain raw output of selection network, pre-softmax.
 
         # Combine this with advantage to do RL.
         # Each sublist should be the same size (B)
-        selected_logits_per_layer = [] # [layer][batch_position]
+        selected_logits_per_layer = [[] for b in range(batch_size)] # [batch_position][layer]
 
         for layer in range(seq_len - 1, 0, -1):
-            # SLL: B arrays of size S
-            # Doing softmax prevents logits from exploding
-            selection_logits = F.log_softmax(torch.cat([
-                torch.cat([unbatched_selection_logits_list[b][i]
-                                for i in range(layer)], 1)
-                for b in range(batch_size)], 0))
+            # Invariant. Test position 0 but assume all sentences obey this.
+            assert len(unbatched_state_pairs[0]) == len(unbatched_selection_logits_list[0]) - 1
+
+            selection_logits = F.log_softmax(
+                torch.cat([
+                    torch.cat([
+                        unbatched_selection_logits_list[b][i]
+                        for i in range(layer)
+                    ], 1)
+                    for b in range(batch_size)
+                ], 0))
             merge_indices = torch.max(selection_logits, 1)[1].data.cpu()
 
             # Remember chosen logits so they can be reinforced later on.
-            selected_logits_per_layer.append([
-                unbatched_selection_logits_list[b][merge_indices[b]]
-                    for b in range(batch_size)])
+            for b in range(batch_size):
+                selected_logits_per_layer[b].append(selection_logits[b, merge_indices[b])
 
             if show_sample:
                 self.merge_sequence_memory.append(merge_indices[8])
@@ -216,8 +220,12 @@ class Pyramid(nn.Module):
 
         for sublist in unbatched_selection_logits_list:
             assert len(sublist) == 1
-        return torch.squeeze(
-            torch.cat([unbatched_state_pairs[b][0][:, :, self.model_dim / 2:] for b in range(batch_size)], 0))
+        return {
+            # Final hidden state of the sentences.
+            'output': torch.squeeze(torch.cat([unbatched_state_pairs[b][0][:, :, self.model_dim / 2:] for b in range(batch_size)], 0)),
+            # Logits selected during execution, post log_softmax
+            'logits': selected_logits_per_layer
+        }
 
     def run_embed(self, x):
         batch_size, seq_length = x.size()
@@ -239,7 +247,8 @@ class Pyramid(nn.Module):
         x = self.unwrap(sentences, transitions)
         emb = self.run_embed(x)
 
-        hh = self.run_hard_pyramid(emb, show_sample)
+        pyramid_out = self.run_hard_pyramid(emb, show_sample)
+        hh = pyramid_out['output']
 
         h = self.wrap(hh)
         output = self.mlp(self.build_features(h))
@@ -269,13 +278,58 @@ class Pyramid(nn.Module):
             advantage = (advantage - advantage.mean()) / \
                 (advantage.std() + 1e-8)
 
-        # Assign REINFORCE output.
-        self.policy_loss = self.reinforce(advantage)
-
         return {
+            # Result of the MLP operation.
             'output': output,
-            'policy_loss': self.reinforce(advantage)
+            # Assign REINFORCE output.
+            'policy_loss': self.reinforce(advantage, pyramid_out['logits'])
         }
+
+    def reinforce(self, advantage, selected_logits_per_layer):
+        self.stats = dict(
+            mean=advantage.mean(),
+            mean_magnitude=advantage.abs().mean(),
+            var=advantage.var(),
+            var_magnitude=advantage.abs().var()
+        )
+
+        batch_size = advantage.size(0)
+
+        # selected_logits_per_layer[batch_position][layer]
+        # advantage[batch_position]
+
+        log_p_action = torch.cat([
+            torch.cat([
+                selected_logits_per_layer[b][l]
+                for l in range(len(selected_logits_per_layer))
+            ], 1)
+            for b in range(batch_size)
+        ], 0) # B x (S - 1)
+        assert logits_matrix.size(0) == batch_size
+
+        if self.use_sentence_pair:
+            # TODO: reimplement
+            pass
+
+        # source: https://github.com/miyosuda/async_deep_reinforce/issues/1
+        if self.rl_entropy:
+            # TODO: Taking exp of a log is not the best way to get the initial
+            # probability...
+            entropy = - (t_logprobs * torch.exp(t_logprobs)).sum(1)
+        else:
+            entropy = 0.0
+
+        # NOTE: Not sure I understand why entropy is inside this
+        # multiplication. Investigate?
+        # loss = -1 * sum(log p(action) * (advantage + entropy))
+        policy_losses = log_p_action * \
+            to_gpu(Variable(advantage, volatile=log_p_action.volatile) +
+                   entropy * self.rl_entropy_beta).expand_as(log_p_action)
+        policy_loss = -1. * torch.sum(policy_losses)
+        policy_loss /= log_p_action.size(0)
+        policy_loss *= self.rl_weight
+
+        return policy_loss
 
     def get_features_dim(self):
         features_dim = self.model_dim if self.use_sentence_pair else self.model_dim / 2
