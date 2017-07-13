@@ -308,9 +308,7 @@ class Pyramid(nn.Module):
 
         # From output_hook of rl_spinn
         if not self.training:
-            return {
-                'output': output
-            }
+            return output
 
         probs = F.softmax(output).data.cpu()
         target = torch.from_numpy(y_batch).long()
