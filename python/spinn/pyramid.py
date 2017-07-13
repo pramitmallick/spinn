@@ -151,8 +151,7 @@ class Pyramid(nn.Module):
         self.register_buffer('baseline', torch.FloatTensor([0.0]))
 
     def predict_actions(self, selection_logits):
-        # logits: 
-        selection_logits = (selection_logits / max(self.spinn.temperature, 1e-8))
+        # TODO: implement temperature
         selection_probs = selection_logits.exp().data.cpu()
 
         if self.training:

@@ -179,6 +179,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         if FLAGS.rl_confidence_penalty:
             temp = 1 + \
                 (temperature - .5) * FLAGS.rl_confidence_penalty * epsilon
+            print(temp)
             model.spinn.temperature = max(1e-3, temp)
 
         # Soft Wake/Sleep based on temperature.
