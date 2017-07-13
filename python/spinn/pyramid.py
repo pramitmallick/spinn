@@ -160,7 +160,7 @@ class Pyramid(nn.Module):
         else:
             # Greedy prediction
             preds = torch.max(selection_probs, 1)[1].numpy()
-        return preds
+        return np.squeeze(preds)
 
     def run_hard_pyramid(self, x, show_sample=False):
         batch_size, seq_len, model_dim = x.data.size()
@@ -228,11 +228,11 @@ class Pyramid(nn.Module):
                     for b in range(batch_size)
                 ], 0))
             merge_indices = self.predict_actions(selection_logits)
-            assert merge_indices.shape == (batch_size, 1)
+            assert merge_indices.shape == (batch_size,), merge_indices.shape
 
             # Remember chosen logits so they can be reinforced later on.
             for b in range(batch_size):
-                selected_logits_per_layer[b].append(selection_logits[b, merge_indices[b, 0]])
+                selected_logits_per_layer[b].append(selection_logits[b, merge_indices[b]])
 
             if show_sample:
                 self.merge_sequence_memory.append(merge_indices[8])
