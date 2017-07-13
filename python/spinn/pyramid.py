@@ -61,6 +61,14 @@ class Pyramid(nn.Module):
                  test_temperature_multiplier=None,
                  selection_dim=None,
                  gumbel=None,
+                 rl_mu=None,
+                 rl_baseline=None,
+                 rl_reward=None,
+                 rl_weight=None,
+                 rl_whiten=None,
+                 rl_entropy=None,
+                 rl_entropy_beta=None,
+                 rl_transition_acc_as_reward=None,
                  **kwargs
                  ):
         super(Pyramid, self).__init__()
@@ -110,6 +118,26 @@ class Pyramid(nn.Module):
         self.inverted_vocabulary = None
         self.temperature_to_display = 0.0
 
+        # RL Pyramid
+        self.rl_mu = rl_mu
+        self.rl_baseline = rl_baseline
+        self.rl_reward = rl_reward
+        self.rl_weight = rl_weight
+        self.rl_whiten = rl_whiten
+        self.rl_entropy = rl_entropy
+        self.rl_entropy_beta = rl_entropy_beta
+
+        if self.rl_baseline == "value":
+            # TODO: Flag-ify constants. 1024D MLP likely too big.
+            self.v_dim = 100
+            self.v_rnn = nn.LSTM(self.input_dim, self.v_dim,
+                                 num_layers=1, batch_first=True)
+            self.v_mlp = MLP(self.v_dim,
+                             mlp_dim=1024, num_classes=1, num_mlp_layers=2,
+                             mlp_ln=True, classifier_dropout_rate=0.1)
+
+        self.register_buffer('baseline', torch.FloatTensor([0.0]))
+
     def run_hard_pyramid(self, x, show_sample=False):
         batch_size, seq_len, model_dim = x.data.size()
 
@@ -126,11 +154,11 @@ class Pyramid(nn.Module):
             self.merge_sequence_memory = None
 
         def recompute_selection_logits(to_recompute):
-            "Recompute logits at certain locations in the (batch size) x (sequences length) matrix.
+            """Recompute logits at certain locations in the (batch size) x (sequences length) matrix.
             The input is a list of pairs, each pair being:
                 0: the batch position (which sentence in the batch)
                 1: the position in the sentence (which word in the sentence). The smaller index is used.
-                e.g. 'rescore words 3 and 4 in sentence 6' -> (6, 3)"
+                e.g. 'rescore words 3 and 4 in sentence 6' -> (6, 3)"""
             left = torch.squeeze(
                 torch.cat([unbatched_state_pairs[batch_pos][merge_pos][:, :, self.model_dim / 2:] for batch_pos, merge_pos in to_recompute], 0))
             right = torch.squeeze(
@@ -165,7 +193,7 @@ class Pyramid(nn.Module):
 
         for layer in range(seq_len - 1, 0, -1):
             # Invariant. Test position 0 but assume all sentences obey this.
-            assert len(unbatched_state_pairs[0]) == len(unbatched_selection_logits_list[0]) - 1
+            assert len(unbatched_state_pairs[0]) == len(unbatched_selection_logits_list[0]) + 1
 
             selection_logits = F.log_softmax(
                 torch.cat([
@@ -179,7 +207,7 @@ class Pyramid(nn.Module):
 
             # Remember chosen logits so they can be reinforced later on.
             for b in range(batch_size):
-                selected_logits_per_layer[b].append(selection_logits[b, merge_indices[b])
+                selected_logits_per_layer[b].append(selection_logits[b, merge_indices[b]])
 
             if show_sample:
                 self.merge_sequence_memory.append(merge_indices[8])
@@ -285,6 +313,58 @@ class Pyramid(nn.Module):
             'policy_loss': self.reinforce(advantage, pyramid_out['logits'])
         }
 
+    def build_reward(self, probs, target, rl_reward="standard"):
+        if rl_reward == "standard":  # Zero One Loss.
+            rewards = torch.eq(probs.max(1)[1], target).float()
+        elif rl_reward == "xent":  # Cross Entropy Loss.
+            _target = target.long().view(-1, 1)
+            # get the log of the inverse probabilities
+            log_inv_prob = torch.log(1 - probs)
+            rewards = -1 * torch.gather(log_inv_prob, 1, _target)
+        else:
+            raise NotImplementedError
+
+        return rewards
+
+    def build_baseline(self, rewards, sentences, transitions, y_batch=None):
+        if self.rl_baseline == "ema":
+            mu = self.rl_mu
+            baseline = self.baseline[0]
+            self.baseline[0] = self.baseline[0] * \
+                (1 - mu) + rewards.mean() * mu
+        elif self.rl_baseline == "pass":
+            baseline = 0.
+        elif self.rl_baseline == "greedy":
+            # Pass inputs to Greedy Max
+            output = self.run_greedy(sentences, transitions)
+
+            # Estimate Reward
+            probs = F.softmax(output).data.cpu()
+            target = torch.from_numpy(y_batch).long()
+            approx_rewards = self.build_reward(
+                probs, target, rl_reward=self.rl_reward)
+
+            baseline = approx_rewards
+        elif self.rl_baseline == "value":
+            output = self.baseline_outp
+
+            if self.rl_reward == "standard":
+                baseline = F.sigmoid(output)
+                self.value_loss = nn.BCELoss()(baseline, to_gpu(
+                    Variable(rewards, volatile=not self.training)))
+            elif self.rl_reward == "xent":
+                baseline = output
+                self.value_loss = nn.MSELoss()(baseline, to_gpu(
+                    Variable(rewards, volatile=not self.training)))
+            else:
+                raise NotImplementedError
+
+            baseline = baseline.data.cpu()
+        else:
+            raise NotImplementedError
+
+        return baseline
+
     def reinforce(self, advantage, selected_logits_per_layer):
         self.stats = dict(
             mean=advantage.mean(),
@@ -329,6 +409,7 @@ class Pyramid(nn.Module):
         policy_loss /= log_p_action.size(0)
         policy_loss *= self.rl_weight
 
+        self.policy_loss = self.reinforce(advantage)
         return policy_loss
 
     def get_features_dim(self):

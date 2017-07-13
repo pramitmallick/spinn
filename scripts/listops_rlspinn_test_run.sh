@@ -29,7 +29,7 @@ FLAGS="
 --encode pass
 --semantic_classifier_keep_rate 1.0
 --rl_reward xent
---model_type RLSPINN
+--model_type Pyramid
 --model_dim 8
 --num_samples 5
 --seq_length 1800
