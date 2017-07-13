@@ -37,6 +37,13 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      test_temperature_multiplier=FLAGS.pyramid_test_time_temperature_multiplier,
                      selection_dim=FLAGS.pyramid_selection_dim,
                      gumbel=FLAGS.pyramid_gumbel,
+                     rl_mu=FLAGS.rl_mu,
+                     rl_baseline=FLAGS.rl_baseline,
+                     rl_reward=FLAGS.rl_reward,
+                     rl_weight=FLAGS.rl_weight,
+                     rl_whiten=FLAGS.rl_whiten,
+                     rl_entropy=FLAGS.rl_entropy,
+                     rl_entropy_beta=FLAGS.rl_entropy_beta,
                      )
 
 
@@ -62,8 +69,8 @@ class Pyramid(nn.Module):
                  selection_dim=None,
                  gumbel=None,
                  rl_mu=None,
-                 rl_baseline=None,
-                 rl_reward=None,
+                 rl_baseline='greedy',
+                 rl_reward='standard',
                  rl_weight=None,
                  rl_whiten=None,
                  rl_entropy=None,
@@ -126,6 +133,7 @@ class Pyramid(nn.Module):
         self.rl_whiten = rl_whiten
         self.rl_entropy = rl_entropy
         self.rl_entropy_beta = rl_entropy_beta
+        self.rl_temperature = 1.0
 
         if self.rl_baseline == "value":
             # TODO: Flag-ify constants. 1024D MLP likely too big.
@@ -137,6 +145,18 @@ class Pyramid(nn.Module):
                              mlp_ln=True, classifier_dropout_rate=0.1)
 
         self.register_buffer('baseline', torch.FloatTensor([0.0]))
+
+    def predict_actions(self, selection_logits):
+        # logits: 
+        selection_logits = (selection_logits / max(self.rl_temperature, 1e-8))
+        selection_probs = selection_logits.exp().data.cpu()
+
+        if self.training:
+            preds = torch.multinomial(selection_probs, 1).numpy()
+        else:
+            # Greedy prediction
+            preds = torch.max(selection_probs, 1)[1].numpy()
+        return selection_logits, preds
 
     def run_hard_pyramid(self, x, show_sample=False):
         batch_size, seq_len, model_dim = x.data.size()
@@ -203,11 +223,12 @@ class Pyramid(nn.Module):
                     ], 1)
                     for b in range(batch_size)
                 ], 0))
-            merge_indices = torch.max(selection_logits, 1)[1].data.cpu()
+            merge_indices = self.predict_actions(selection_logits)
+            assert merge_indices.shape == (batch_size, 1)
 
             # Remember chosen logits so they can be reinforced later on.
             for b in range(batch_size):
-                selected_logits_per_layer[b].append(selection_logits[b, merge_indices[b]])
+                selected_logits_per_layer[b].append(selection_logits[b, merge_indices[b, 0]])
 
             if show_sample:
                 self.merge_sequence_memory.append(merge_indices[8])
@@ -243,7 +264,7 @@ class Pyramid(nn.Module):
                 split_selection_logit = recompute_selection_logits(to_recompute)
                 for i in range(len(to_recompute)):
                     batch_pos, merge_pos = to_recompute[i]
-                    unbatched_selection_logits_list[index_pair[0]][index_pair[1]] = \
+                    unbatched_selection_logits_list[batch_pos][merge_pos] = \
                         split_selection_logit[i]
 
         for sublist in unbatched_selection_logits_list:
@@ -322,7 +343,7 @@ class Pyramid(nn.Module):
             log_inv_prob = torch.log(1 - probs)
             rewards = -1 * torch.gather(log_inv_prob, 1, _target)
         else:
-            raise NotImplementedError
+            raise NotImplementedError('Reward ' + rl_reward + ' not implemented')
 
         return rewards
 
@@ -335,16 +356,7 @@ class Pyramid(nn.Module):
         elif self.rl_baseline == "pass":
             baseline = 0.
         elif self.rl_baseline == "greedy":
-            # Pass inputs to Greedy Max
-            output = self.run_greedy(sentences, transitions)
-
-            # Estimate Reward
-            probs = F.softmax(output).data.cpu()
-            target = torch.from_numpy(y_batch).long()
-            approx_rewards = self.build_reward(
-                probs, target, rl_reward=self.rl_reward)
-
-            baseline = approx_rewards
+            raise NotImplementedError('Pyramid does not support greedy baseline yet.')
         elif self.rl_baseline == "value":
             output = self.baseline_outp
 
@@ -409,7 +421,7 @@ class Pyramid(nn.Module):
         policy_loss /= log_p_action.size(0)
         policy_loss *= self.rl_weight
 
-        self.policy_loss = self.reinforce(advantage)
+        self.policy_loss = policy_loss
         return policy_loss
 
     def get_features_dim(self):

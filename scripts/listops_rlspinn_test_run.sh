@@ -22,13 +22,13 @@ FLAGS="
 --learning_rate_decay_per_10k_steps 0.514994481626
 --mlp_dim 16
 --nouse_tracking_in_composition 
---rl_baseline greedy
+--rl_baseline ema
 --norl_wake_sleep 
 --nolateral_tracking 
 --rl_valid 
 --encode pass
 --semantic_classifier_keep_rate 1.0
---rl_reward xent
+--rl_reward standard
 --model_type Pyramid
 --model_dim 8
 --num_samples 5
