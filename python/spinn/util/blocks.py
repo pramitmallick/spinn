@@ -34,18 +34,28 @@ def gumbel_sample(input, temperature=1.0, avg=False, N=10000):
     x = F.softmax(x.view(input.size(0), -1))
     return x.view_as(input)
 
-def st_gumbel_sample(input, temperature=1.0, avg=False, N=10000):
+def st_gumbel_sample(input, temperature=1.0, avg=False, N=10000, return_argmax=False):
     # Untested. Source: https://discuss.pytorch.org/t/stop-gradients-for-st-gumbel-softmax/530/5
     x = gumbel_sample(input, temperature, avg, N)
 
-    max_val, _ = torch.max(x, x.dim()-1)
+    max_val, argmax = torch.max(x, x.dim() - 1)
     x_hard = x == max_val.expand_as(x)
     tmp = (x_hard.float() - x)
     tmp2 = tmp.clone()
     tmp2.detach_()
     x = tmp2 + x
         
-    return x.view_as(input)
+    if return_argmax:
+        return x.view_as(input), argmax
+    else:
+        return x.view_as(input)
+
+def st_gumbel_sample_index_scalar(input, temperature=1.0, avg=False, N=10000):
+    # Crazy idea!
+    x, argmax = st_gumbel_sample(input, temperature, avg, N, return_argmax=True)
+    scalar = torch.gather(x, x.dim() - 1, argmax)
+
+    return argmax.data.cpu().numpy().transpose().astype(int)[0], scalar
 
 
 def debug_gradient(model, losses):

@@ -7,7 +7,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 
-from spinn.util.blocks import Embed, to_gpu, MLP, Linear, HeKaimingInitializer, gumbel_sample, st_gumbel_sample
+from spinn.util.blocks import Embed, to_gpu, MLP, Linear, HeKaimingInitializer, gumbel_sample, st_gumbel_sample, st_gumbel_sample_index_scalar
 from spinn.util.misc import Args, Vocab
 from spinn.util.blocks import SimpleTreeLSTM
 from spinn.util.sparks import sparks
@@ -137,10 +137,10 @@ class Pyramid(nn.Module):
                 index_pair = to_recompute[i]
                 if len(unbatched_selection_logits_list[index_pair[0]]) > index_pair[1]:
                     unbatched_selection_logits_list[index_pair[0]][index_pair[1]] = \
-                        split_selection_logit[i].data.cpu().numpy()
+                        split_selection_logit[i]
                 else:
                     # assert len(unbatched_selection_logits_list[index_pair[0]]) == index_pair[1]
-                    unbatched_selection_logits_list[index_pair[0]].append(split_selection_logit[i].data.cpu().numpy())
+                    unbatched_selection_logits_list[index_pair[0]].append(split_selection_logit[i])
             return unbatched_selection_logits_list
 
         # Most activations won't change between steps, so this can be preserved
@@ -153,11 +153,15 @@ class Pyramid(nn.Module):
 
         for layer in range(seq_len - 1, 0, -1):
             selection_logits_list = [
-                np.concatenate([unbatched_selection_logits_list[b][i]
-                                for i in range(layer)], axis=1)
+                torch.cat([unbatched_selection_logits_list[b][i]
+                                for i in range(layer)], 1)
                 for b in range(batch_size)]
-            selection_logits = np.concatenate(selection_logits_list, axis=0)
-            merge_indices = np.argmax(selection_logits, axis=1)
+            selection_logits = torch.cat(selection_logits_list, 0)
+            if self.training:
+                # TODO: Use the temperature variable.
+                merge_indices, magic_gradient_ones = st_gumbel_sample_index_scalar(selection_logits)
+            else:
+                merge_indices = np.argmax(selection_logits.data.cpu().numpy(), axis=1)
 
             if show_sample:
                 self.merge_sequence_memory.append(merge_indices[8])
@@ -171,6 +175,10 @@ class Pyramid(nn.Module):
             right = torch.squeeze(torch.cat(rights, 0))
 
             composition_result = torch.unsqueeze(self.composition_fn(left, right), 1)
+
+            # Unpack and multiply by the special 1-valued gradient-tracking scalars produced st_gumbel_softmax
+            if self.training:
+                composition_result = composition_result * magic_gradient_ones.unsqueeze(1).expand_as(composition_result)
 
             # Unpack and apply
             composition_result_list = torch.chunk(composition_result, batch_size, 0)
@@ -292,7 +300,7 @@ class Pyramid(nn.Module):
         x = self.unwrap(sentences, transitions)
         emb = self.run_embed(x)
 
-        if self.test_temperature_multiplier == 0.0 and not self.training:
+        if self.gumbel == "st" or (self.test_temperature_multiplier == 0.0 and not self.training):
             hh = self.run_hard_pyramid(emb, show_sample)
         else:
             hh = self.run_pyramid(emb, show_sample,
