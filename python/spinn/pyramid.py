@@ -110,8 +110,20 @@ class Pyramid(nn.Module):
         self.inverted_vocabulary = None
         self.temperature_to_display = 0.0
 
-    def run_hard_pyramid(self, x, show_sample=False):
+    def run_hard_pyramid(self, x, show_sample=False, temperature_multiplier=1.0):
         batch_size, seq_len, model_dim = x.data.size()
+
+        temperature = temperature_multiplier
+        if self.trainable_temperature:
+            temperature *= self.temperature
+        if not self.training:
+            temperature *= \
+                self.test_temperature_multiplier
+
+        if not isinstance(temperature, float):
+            self.temperature_to_display = float(temperature.data.cpu().numpy())
+        else:
+            self.temperature_to_display = temperature
 
         state_pairs = torch.chunk(x, seq_len, 1)
         unbatched_state_pairs = [[] for _ in range(batch_size)]
@@ -158,8 +170,10 @@ class Pyramid(nn.Module):
                 for b in range(batch_size)]
             selection_logits = torch.cat(selection_logits_list, 0)
             if self.training:
-                # TODO: Use the temperature variable.
-                merge_indices, magic_gradient_ones = st_gumbel_sample_index_scalar(selection_logits)
+                local_temperature = temperature
+                if not isinstance(local_temperature, float):
+                    local_temperature = local_temperature.expand_as(selection_logits)
+                merge_indices, magic_gradient_ones = st_gumbel_sample_index_scalar(selection_logits, temperature=local_temperature)
             else:
                 merge_indices = np.argmax(selection_logits.data.cpu().numpy(), axis=1)
 
@@ -301,7 +315,7 @@ class Pyramid(nn.Module):
         emb = self.run_embed(x)
 
         if self.gumbel == "st" or (self.test_temperature_multiplier == 0.0 and not self.training):
-            hh = self.run_hard_pyramid(emb, show_sample)
+            hh = self.run_hard_pyramid(emb, show_sample, temperature_multiplier=pyramid_temperature_multiplier)
         else:
             hh = self.run_pyramid(emb, show_sample,
                                   temperature_multiplier=pyramid_temperature_multiplier)
