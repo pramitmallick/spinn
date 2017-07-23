@@ -273,7 +273,7 @@ class Pyramid(nn.Module):
                 layer_state_pairs.append(new_state_pair)
             all_state_pairs.append(layer_state_pairs)
 
-        rval = torch.cat([all_state_pairs[-(1 + amount_of_padding)][amount_of_padding][b, self.model_dim / 2:].unsqueeze(0) for (b, amount_of_padding) in enumerate(seq_len - example_lengths)], 0)
+        rval = torch.cat([all_state_pairs[example_length - 1][-1][b, self.model_dim / 2:].unsqueeze(0) for (b, example_length) in enumerate(example_lengths)], 0)
         return rval
 
     def run_embed(self, x):
