@@ -110,7 +110,7 @@ class Pyramid(nn.Module):
         self.inverted_vocabulary = None
         self.temperature_to_display = 0.0
 
-    def run_hard_pyramid(self, x, show_sample=False):
+    def run_hard_pyramid(self, x, example_lengths, show_sample=False):
         batch_size, seq_len, model_dim = x.data.size()
 
         state_pairs = torch.chunk(x, seq_len, 1)
@@ -146,6 +146,7 @@ class Pyramid(nn.Module):
                                 for i in range(layer)], axis=1)
                 for b in range(batch_size)]
             selection_logits = np.concatenate(selection_logits_list, axis=0)
+            ## TODO
             merge_indices = np.argmax(selection_logits, axis=1)
 
             if show_sample:
@@ -194,8 +195,9 @@ class Pyramid(nn.Module):
         return torch.squeeze(
             torch.cat([unbatched_state_pairs[b][0][:, :, self.model_dim / 2:] for b in range(batch_size)], 0))
 
-    def run_pyramid(self, x, show_sample=False, indices=None, temperature_multiplier=1.0):
+    def run_pyramid(self, x, example_lengths, show_sample=False, indices=None, temperature_multiplier=1.0):
         batch_size, seq_len, model_dim = x.data.size()
+        num_padding_tokens = to_gpu(Variable(torch.from_numpy(seq_len - example_lengths)))
 
         all_state_pairs = []
         all_state_pairs.append(torch.chunk(x, seq_len, 1))
@@ -207,7 +209,7 @@ class Pyramid(nn.Module):
 
         temperature = temperature_multiplier
         if self.trainable_temperature:
-            temperature *= self.temperature
+            temperature *= torch.abs(self.temperature)
         if not self.training:
             temperature *= \
                 self.test_temperature_multiplier
@@ -228,6 +230,7 @@ class Pyramid(nn.Module):
                 selection_input = torch.cat(
                     [left[:, self.model_dim / 2:], right[:, self.model_dim / 2:]], 1)
                 selection_logit = self.selection_fn(selection_input)
+                selection_logit -= 1000000 * (position < num_padding_tokens).float()
                 selection_logits_list.append(selection_logit)
 
             selection_logits = torch.cat(selection_logits_list, 1)
@@ -270,7 +273,8 @@ class Pyramid(nn.Module):
                 layer_state_pairs.append(new_state_pair)
             all_state_pairs.append(layer_state_pairs)
 
-        return all_state_pairs[-1][-1][:, self.model_dim / 2:]
+        rval = torch.cat([all_state_pairs[-(1 + amount_of_padding)][amount_of_padding][b, self.model_dim / 2:].unsqueeze(0) for (b, amount_of_padding) in enumerate(seq_len - example_lengths)], 0)
+        return rval
 
     def run_embed(self, x):
         batch_size, seq_length = x.size()
@@ -285,7 +289,7 @@ class Pyramid(nn.Module):
         return embeds
 
     def forward(self, sentences, transitions, y_batch=None, show_sample=False,
-                pyramid_temperature_multiplier=1.0, **kwargs):
+                pyramid_temperature_multiplier=1.0, example_lengths=None, **kwargs):
         # Useful when investigating dynamic batching:
         # self.seq_lengths = sentences.shape[1] - (sentences == 0).sum(1)
 
@@ -293,9 +297,9 @@ class Pyramid(nn.Module):
         emb = self.run_embed(x)
 
         if self.test_temperature_multiplier == 0.0 and not self.training:
-            hh = self.run_hard_pyramid(emb, show_sample)
+            hh = self.run_hard_pyramid(emb, example_lengths, show_sample)
         else:
-            hh = self.run_pyramid(emb, show_sample,
+            hh = self.run_pyramid(emb, example_lengths, show_sample,
                                   temperature_multiplier=pyramid_temperature_multiplier)
 
         h = self.wrap(hh)
