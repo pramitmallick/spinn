@@ -1,21 +1,15 @@
-# Stack-augmented Parser-Interpreter Neural Network
+# Code for Williams, Drozdov, and Bowman '17
 
-This repository contains the source code based on the paper [A Fast Unified Model for Sentence Parsing and Understanding][1] and [original codebase][9]. For a more informal introduction to the ideas behind the model, see this [Stanford NLP blog post][8].
+This release contains the source code for the paper TODO.
 
-The included implementations are:
-
-- A **Python/Pytorch** implementation of SPINN using a naïve stack representation (named `fat-stack`)
-
-## Python code
-
-The Python code lives, quite intuitively, in the `python` folder. We used this code to train and test the SPINN models before publication.
+It is built on a fairly large and unwieldy [codebase][9] that was prepared for the paper [A Fast Unified Model for Sentence Parsing and Understanding][1]. The codebase at head is still under active development for other projects.
 
 ### Installation
 
 Requirements:
 
 - Python 2.7
-- Pytorch
+- Pytorch 0.2.0
 
 Install most required Python dependencies using the command below.
 
