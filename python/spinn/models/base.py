@@ -9,10 +9,8 @@ import gflags
 import numpy as np
 
 from spinn import util
-from spinn.data.listops import load_listops_data
-from spinn.data.sst import load_sst_data, load_sst_binary_data
 from spinn.data.nli import load_nli_data
-from spinn.util.blocks import ModelTrainer, ModelTrainer_ES, bundle
+from spinn.util.blocks import ModelTrainer, bundle
 from spinn.util.blocks import EncodeGRU, IntraAttention, Linear, ReduceTreeGRU, ReduceTreeLSTM
 from spinn.util.misc import Args
 from spinn.util.logparse import parse_flags
