@@ -1,8 +1,8 @@
 # Code for Williams, Drozdov, and Bowman '17
 
-This release contains the source code for the paper TODO.
+This release contains the source code for the paper: "Learning to parse from a semantic objective: It works, but is it syntax?"
 
-It is built on a fairly large and unwieldy [codebase][9] that was prepared for the paper [A Fast Unified Model for Sentence Parsing and Understanding][1]. The codebase at head is still under active development for other projects.
+It is built on a fairly large and unwieldy [codebase][9] that was prepared for the paper [A Fast Unified Model for Sentence Parsing and Understanding][1]. The master branch may still be under active development for other projects.
 
 ### Installation
 
@@ -15,11 +15,17 @@ Install most required Python dependencies using the command below.
 
     pip install -r python/requirements.txt
 
-Install Pytorch based on instructions online: http://pytorch.org
+Install Pytorch based on instructions online: `http://pytorch.org`
 
-### Running the code
+Data to download:
 
-The main executable for the SNLI experiments in the paper is [supervised_classifier.py](https://github.com/mrdrozdov/spinn/blob/master/python/spinn/models/supervised_classifier.py), whose flags specify the hyperparameters of the model. You can specify gpu usage by setting `--gpu` flag greater than or equal to 0. Uses the CPU by default.
+- 840B word 300D [GloVe word vectors](http://nlp.stanford.edu/projects/glove/)
+- [MultiNLI](http://www.nyu.edu/projects/bowman/multinli/)
+- [SNLI](http://nlp.stanford.edu/projects/snli/)
+
+### Running new experiments
+
+The main executables for the SNLI experiments in the paper is [`supervised_classifier.py`](https://github.com/nyu-mll/spinn/blob/is-it-syntax-release/python/spinn/models/supervised_classifier.py) (and the analogous [`rl_classifier.py`](https://github.com/nyu-mll/spinn/blob/is-it-syntax-release/python/spinn/models/rl_classifier.py), whose flags specify the hyperparameters of the model. You can specify gpu usage by setting `--gpu` flag greater than or equal to 0. Uses the CPU by default.
 
 Here's a sample command that runs a fast, low-dimensional CPU training run, training and testing only on the dev set. It assumes that you have a copy of [SNLI](http://nlp.stanford.edu/projects/snli/) available locally.
 
@@ -30,48 +36,23 @@ Here's a sample command that runs a fast, low-dimensional CPU training run, trai
         --embedding_data_path python/spinn/tests/test_embedding_matrix.5d.txt \
         --word_embedding_dim 5 --model_dim 10 --model_type CBOW
 
-For full runs, you'll also need a copy of the 840B word 300D [GloVe word vectors](http://nlp.stanford.edu/projects/glove/).
+### Retraining the experiments in the paper
 
-## Semi-Supervised Parsing
+Concatenate the SNLI and MultiNLI training sets into a single file, place it in an accessible directory, then run the commands in `[scripts/train_all_models_x5.sh](https://github.com/nyu-mll/spinn/blob/is-it-syntax-release/scripts/train_all_models_x5.sh)`.
 
-You can train SPINN using only sentence-level labels. In this case, the integrated parser will randomly sample labels during training time, and will be optimized with the REINFORCE algorithm. The command to run this model looks slightly different:
+The experiment names don't neatly correspond to the terms used in the paper, but they shouldn't be too opaque. For a key: `noenc` = w/o Leaf LSTM, `enc_fix` = w/ Leaf LSTM, `_t_` = 'NC', `ChoiPyramid(_b)` = ST-Gumbel, `_s_` = Trained on SNLI.
 
-    PYTHONPATH=spinn/python \
-        python2.7 -m spinn.models.rl_classifier --data_type listops \
-        --training_data_path spinn/python/spinn/data/listops/train_d20a.tsv \
-        --eval_data_path spinn/python/spinn/data/listops/test_d20a.tsv  \
-        --word_embedding_dim 32 --model_dim 32 --mlp_dim 16 --model_type RLSPINN \
-        --rl_baseline value --rl_reward standard --rl_weight 42.0
+### Running the trained models from the paper or viewing their output
 
-Note: This model does not yet work well on natural language data, although it does on the included synthetic dataset called `listops`. Please look at the [sweep file][10] for an idea of which hyperparameters to use.
+First, download the log and checkpoint package from [here](http://nyu.edu/projects/bowman/williams_syntax_checkpoints.zip) (warning: 3.3GB).
 
-## Log Analysis
+To use the trained models, run any of the commands in `[scripts/train_all_models_x5.sh](https://github.com/nyu-mll/spinn/blob/is-it-syntax-release/scripts/train_all_models_x5.sh)` with the following flags appended to the end of the command and with . This will evaluate the model on the specified datasets, write the resulting trees to one `.report` file per dataset, and exit.
 
-This project contains a handful of tools for easier analysis of your model's performance.
+`--eval_data_path ../multinli_0.9/multinli_0.9_dev_matched.jsonl:../ptb.jsonl --expanded_eval_only_mode --write_eval_report`
 
-For one, after a periodic number of batches, some useful statistics are printed to a file specified by `--log_path`. This is convenient for visual inspection, and the script [parse_logs.py](https://github.com/mrdrozdov/spinn/blob/master/scripts/parse_logs.py) is an example of how to easily parse this log file.
+If you simply need the trees produced by the trained models for MultiNLI (dev_matched), those can be found in the checkpoint package as `.report` files.
 
-In addition, there is support for realtime summaries using [Visdom](https://github.com/facebookresearch/visdom). This requires a few steps:
-
-1. Run your experiment normally, but specify a `--metrics_path`.
-2. Run Visdom in it's own terminal instance: `python -m visdom.server`
-3. Run this project's [visdom_reporter.py](https://github.com/mrdrozdov/spinn/blob/master/scripts/visdom_reporter.py) script, specifying a root which matches the `--metrics_path` flag: `python scripts/visdom_reporter.py --root $METRICS_PATH`
-
-Then open Visdom in a browser window to see graphs representing accuracy, loss and some other metrics updated in real time. This is most useful when running multiple experiments simultaneously.
-
-## Contributing
-
-If you're interested in proposing a change or fix to SPINN, please submit a Pull Request. In addition, ensure that existing tests pass, and add new tests as you see appropriate. To run tests, simply run this command from the root directory:
-
-    nosetests python/spinn/tests
-
-### Adding Logging Fields
-
-SPINN outputs metrics and statistics into a text [protocol buffer](https://developers.google.com/protocol-buffers/) format. When adding new fields to the proto file, the generated proto code needs to be updated.
-
-    bash python/build.sh
-
-## License
+### License
 
 Copyright 2017, New York University
 
