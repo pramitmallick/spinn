@@ -1,6 +1,6 @@
 # Code for Williams, Drozdov, and Bowman '17
 
-This release contains the source code for the paper: "Learning to parse from a semantic objective: It works, but is it syntax?"
+This release contains the source code for the paper: "Learning to parse from a semantic objective: It works. Is it syntax?"
 
 It is built on a fairly large and unwieldy [codebase][9] that was prepared for the paper [A Fast Unified Model for Sentence Parsing and Understanding][1]. The master branch may still be under active development for other projects.
 
