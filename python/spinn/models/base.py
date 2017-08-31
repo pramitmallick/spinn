@@ -9,11 +9,6 @@ import gflags
 import numpy as np
 
 from spinn import util
-from spinn.data.arithmetic import load_sign_data
-from spinn.data.arithmetic import load_simple_data
-from spinn.data.dual_arithmetic import load_eq_data
-from spinn.data.dual_arithmetic import load_relational_data
-from spinn.data.boolean import load_boolean_data
 from spinn.data.listops import load_listops_data
 from spinn.data.sst import load_sst_data, load_sst_binary_data
 from spinn.data.nli import load_nli_data
@@ -27,8 +22,6 @@ import spinn.spinn_core_model
 import spinn.plain_rnn
 import spinn.cbow
 import spinn.choi_pyramid
-
-from tuner_utils.yellowfin import YFOptimizer
 
 # PyTorch
 import torch
@@ -749,10 +742,7 @@ def init_model(
             lr=FLAGS.learning_rate,
             eps=1e-08)
     elif FLAGS.optimizer_type == "YellowFin":
-        optimizer = YFOptimizer(model.parameters(), lr=FLAGS.learning_rate)
-        if FLAGS.actively_decay_learning_rate:
-            logger.Log(
-                "WARNING: Ignoring actively_decay_learning_rate and learning_rate_decay_per_10k_steps. Not implemeted for YellowFin.")
+        raise NotImplementedError
     else:
         raise NotImplementedError
 

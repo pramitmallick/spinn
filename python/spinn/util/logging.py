@@ -9,7 +9,6 @@ import numpy as np
 from spinn.util.blocks import flatten
 from spinn.util.misc import time_per_token
 from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
-from tuner_utils.yellowfin import YFOptimizer
 
 
 class InspectModel(object):
