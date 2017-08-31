@@ -38,7 +38,7 @@ Here's a sample command that runs a fast, low-dimensional CPU training run, trai
 
 ### Retraining the experiments in the paper
 
-Concatenate the SNLI and MultiNLI training sets into a single file, place it in an accessible directory, then run the commands in `[scripts/train_all_models_x5.sh](https://github.com/nyu-mll/spinn/blob/is-it-syntax-release/scripts/train_all_models_x5.sh)`.
+Concatenate the SNLI and MultiNLI training sets into a single file, place it in an accessible directory, then run the commands in [`scripts/train_all_models_x5.sh`](https://github.com/nyu-mll/spinn/blob/is-it-syntax-release/scripts/train_all_models_x5.sh).
 
 The experiment names don't neatly correspond to the terms used in the paper, but they shouldn't be too opaque. For a key: `noenc` = w/o Leaf LSTM, `enc_fix` = w/ Leaf LSTM, `_t_` = 'NC', `ChoiPyramid(_b)` = ST-Gumbel, `_s_` = Trained on SNLI.
 
@@ -46,9 +46,9 @@ The experiment names don't neatly correspond to the terms used in the paper, but
 
 First, download the log and checkpoint package from [here](http://nyu.edu/projects/bowman/williams_syntax_checkpoints.zip) (warning: 3.3GB).
 
-To use the trained models, run any of the commands in `[scripts/train_all_models_x5.sh](https://github.com/nyu-mll/spinn/blob/is-it-syntax-release/scripts/train_all_models_x5.sh)` with the following flags appended to the end of the command and with . This will evaluate the model on the specified datasets, write the resulting trees to one `.report` file per dataset, and exit.
+To use the trained models, run any of the commands in [`scripts/train_all_models_x5.sh`](https://github.com/nyu-mll/spinn/blob/is-it-syntax-release/scripts/train_all_models_x5.sh) with the following flags appended to the end of the command. This will evaluate the model on the specified datasets, write the resulting trees to one `.report` file per dataset, and exit.
 
-`--eval_data_path ../multinli_0.9/multinli_0.9_dev_matched.jsonl:../ptb.jsonl --expanded_eval_only_mode --write_eval_report`
+    ... --eval_data_path ../multinli_0.9/multinli_0.9_dev_matched.jsonl:../ptb.jsonl --expanded_eval_only_mode --write_eval_report
 
 If you simply need the trees produced by the trained models for MultiNLI (dev_matched), those can be found in the checkpoint package as `.report` files.
 
