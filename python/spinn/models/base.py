@@ -380,6 +380,12 @@ def get_flags():
         "reduce", "treelstm", [
             "treelstm", "treegru", "tanh"], "Specify composition function.")
 
+    # Random tree settings.
+    gflags.DEFINE_boolean(
+        "optimize_transition_loss",
+        True,
+        "If set to False, then will not optimize the transition loss.")
+
     # Pyramid model settings
     gflags.DEFINE_boolean(
         "pyramid_trainable_temperature",

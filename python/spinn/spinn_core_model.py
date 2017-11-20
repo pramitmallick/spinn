@@ -47,6 +47,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
         composition_args=composition_args,
         detach=FLAGS.transition_detach,
         evolution=FLAGS.evolution,
+        optimize_transition_loss=FLAGS.optimize_transition_loss,
     )
 
 
@@ -589,12 +590,15 @@ class BaseModel(nn.Module):
                  composition_args=None,
                  detach=None,
                  evolution=None,
+                 optimize_transition_loss=True,
                  **kwargs
                  ):
         super(BaseModel, self).__init__()
 
         assert not (
             use_tracking_in_composition and not lateral_tracking), "Lateral tracking must be on to use tracking in composition."
+
+        self.optimize_transition_loss = optimize_transition_loss
 
         self.use_sentence_pair = use_sentence_pair
         self.use_difference_feature = use_difference_feature
