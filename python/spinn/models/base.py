@@ -135,11 +135,11 @@ def load_data_and_embeddings(
         if FLAGS.data_type == "nli":
             # Load the data.
             raw_training_data = data_manager.load_data(
-                training_data_path, FLAGS.lowercase, choose_train)
+                training_data_path, FLAGS.lowercase, choose_train, full=options.full_trees)
         else:
             # Load the data.
             raw_training_data = data_manager.load_data(
-                training_data_path, FLAGS.lowercase)
+                training_data_path, FLAGS.lowercase, full=options.full_trees)
     else:
         raw_training_data = None
 
@@ -380,11 +380,16 @@ def get_flags():
         "reduce", "treelstm", [
             "treelstm", "treegru", "tanh"], "Specify composition function.")
 
-    # Random tree settings.
+    # Fixed tree settings.
     gflags.DEFINE_boolean(
         "optimize_transition_loss",
         True,
         "If set to False, then will not optimize the transition loss.")
+    gflags.DEFINE_boolean(
+        "full_trees",
+        False,
+        "If set to True, then all parse trees will be full binary" +\
+        "trees and sentences padded to a factor of 2.")
 
     # Pyramid model settings
     gflags.DEFINE_boolean(
