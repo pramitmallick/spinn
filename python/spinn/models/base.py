@@ -135,11 +135,11 @@ def load_data_and_embeddings(
         if FLAGS.data_type == "nli":
             # Load the data.
             raw_training_data = data_manager.load_data(
-                training_data_path, FLAGS.lowercase, choose_train, full=options.full_trees)
+                training_data_path, FLAGS.lowercase, choose_train, full=FLAGS.full_trees)
         else:
             # Load the data.
             raw_training_data = data_manager.load_data(
-                training_data_path, FLAGS.lowercase, full=options.full_trees)
+                training_data_path, FLAGS.lowercase, full=FLAGS.full_trees)
     else:
         raw_training_data = None
 
