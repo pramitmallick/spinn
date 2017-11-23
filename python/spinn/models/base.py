@@ -382,10 +382,6 @@ def get_flags():
 
     # Fixed tree settings.
     gflags.DEFINE_boolean(
-        "optimize_transition_loss",
-        True,
-        "If set to False, then will not optimize the transition loss.")
-    gflags.DEFINE_boolean(
         "full_trees",
         False,
         "If set to True, then all parse trees will be full binary" +\
