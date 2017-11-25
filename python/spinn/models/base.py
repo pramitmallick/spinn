@@ -148,13 +148,13 @@ def load_data_and_embeddings(
         raw_eval_sets = []
         for path in eval_data_path.split(':'):
             raw_eval_data = data_manager.load_data(
-                path, FLAGS.lowercase, choose_eval)
+                path, FLAGS.lowercase, choose_eval, mode=FLAGS.transition_mode)
             raw_eval_sets.append((path, raw_eval_data))
     else:
         # Load the eval data.
         raw_eval_sets = []
         for path in eval_data_path.split(':'):
-            raw_eval_data = data_manager.load_data(path, FLAGS.lowercase)
+            raw_eval_data = data_manager.load_data(path, FLAGS.lowercase, mode=FLAGS.transition_mode)
             raw_eval_sets.append((path, raw_eval_data))
 
     # Prepare the vocabulary.
