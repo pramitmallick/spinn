@@ -135,11 +135,11 @@ def load_data_and_embeddings(
         if FLAGS.data_type == "nli":
             # Load the data.
             raw_training_data = data_manager.load_data(
-                training_data_path, FLAGS.lowercase, choose_train, full=FLAGS.full_trees)
+                training_data_path, FLAGS.lowercase, choose_train, mode=FLAGS.transition_mode)
         else:
             # Load the data.
             raw_training_data = data_manager.load_data(
-                training_data_path, FLAGS.lowercase, full=FLAGS.full_trees)
+                training_data_path, FLAGS.lowercase, mode=FLAGS.transition_mode)
     else:
         raw_training_data = None
 
@@ -381,11 +381,16 @@ def get_flags():
             "treelstm", "treegru", "tanh"], "Specify composition function.")
 
     # Fixed tree settings.
+    gflags.DEFINE_enum(
+        "transition_mode", "default", [
+            "default", "full", "balanced"], "Specify whether to use given" +\
+            " binary parse trees or to use a fixed strategy.")
     gflags.DEFINE_boolean(
         "full_trees",
         False,
         "If set to True, then all parse trees will be full binary" +\
-        "trees and sentences padded to a factor of 2.")
+        " trees and sentences padded to a factor of 2. (deprecated;" +\
+        " use transition_mode instead)")
 
     # Pyramid model settings
     gflags.DEFINE_boolean(
@@ -630,6 +635,11 @@ def flag_defaults(FLAGS, load_log_flags=False):
 
     if not torch.cuda.is_available():
         FLAGS.gpu = -1
+
+    if FLAGS.full_trees:
+        print('Using deprecated flag full_trees. Use transition_mode instead.')
+        assert FLAGS.transition_mode == 'default', 'If full_trees is set, then do not use transition_mode.'
+        FLAGS.transition_mode = 'full'
 
 
 def init_model(

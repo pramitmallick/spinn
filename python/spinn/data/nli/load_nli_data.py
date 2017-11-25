@@ -4,9 +4,10 @@ import math
 import json
 import codecs
 
+from spinn.util.data import PADDING_TOKEN
+
 SENTENCE_PAIR_DATA = True
 FIXED_VOCABULARY = None
-PADDING_TOKEN = "_PAD"
 
 LABEL_MAP = {
     "entailment": 0,
@@ -49,11 +50,35 @@ def full_transitions(N):
     return full_transitions(N/2) + full_transitions(N/2) + [1]
 
 
+def balanced_transitions(N):
+    """
+    Recursively creates a balanced binary tree with N
+    leaves using shift reduce transitions.
+    """
+    if N == 3:
+        return [0, 0, 1, 0, 1]
+    elif N == 2:
+        return [0, 0, 1]
+    elif N == 1:
+        return [0]
+    else:
+        right_N = N // 2
+        left_N = N - right_N
+        return balanced_transitions(left_N) + balanced_transitions(right_N) + [1]
+
+
 def convert_binary_bracketing_full(parse, lowercase=False):
     tokens, transitions = convert_binary_bracketing(parse, lowercase)
     if len(tokens) > 1:
         tokens = full_tokens(tokens)
         transitions = full_transitions(len(tokens))
+    return tokens, transitions
+
+
+def convert_binary_bracketing_balanced(parse, lowercase=False):
+    tokens, transitions = convert_binary_bracketing(parse, lowercase)
+    if len(tokens) > 1:
+        transitions = balanced_transitions(len(tokens))
     return tokens, transitions
 
 
@@ -76,8 +101,15 @@ def convert_binary_bracketing(parse, lowercase=False):
     return tokens, transitions
 
 
-def load_data(path, lowercase=False, choose=lambda x: True, full=False):
-    convert = convert_binary_bracketing_full if full else convert_binary_bracketing
+def load_data(path, lowercase=False, choose=lambda x: True, mode='default'):
+    if mode == 'default':
+        convert = convert_binary_bracketing
+    elif mode == 'full':
+        convert = convert_binary_bracketing_full
+    elif mode == 'balanced':
+        convert = convert_binary_bracketing_balanced
+    else:
+        raise NotImplementedError("The mode={} is not implemented.".format(mode))
     print "Loading", path
     examples = []
     failed_parse = 0
