@@ -37,6 +37,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      composition_ln=FLAGS.composition_ln,
                      context_args=context_args,
                      trainable_temperature=FLAGS.pyramid_trainable_temperature,
+                     highway=FLAGS.choipyr_highway,
                      )
 
 
@@ -59,6 +60,7 @@ class ChoiPyramid(nn.Module):
                  composition_ln=None,
                  context_args=None,
                  trainable_temperature=None,
+                 highway=None,
                  **kwargs
                  ):
         super(ChoiPyramid, self).__init__()
@@ -87,7 +89,8 @@ class ChoiPyramid(nn.Module):
             model_dim / 2,
             False,
             composition_ln=composition_ln,
-            trainable_temperature=trainable_temperature)
+            trainable_temperature=trainable_temperature,
+            highway=highway)
 
         mlp_input_dim = self.get_features_dim()
 
@@ -262,13 +265,13 @@ class ChoiPyramid(nn.Module):
 class BinaryTreeLSTM(nn.Module):
 
     def __init__(self, word_dim, hidden_dim, intra_attention,
-                 composition_ln=False, trainable_temperature=False):
+                 composition_ln=False, highway=False, trainable_temperature=False):
         super(BinaryTreeLSTM, self).__init__()
         self.word_dim = word_dim
         self.hidden_dim = hidden_dim
         self.intra_attention = intra_attention
         self.treelstm_layer = BinaryTreeLSTMLayer(
-            hidden_dim, composition_ln=composition_ln)
+            hidden_dim, composition_ln=composition_ln, highway=highway)
 
         # TODO: Add something to blocks to make this use case more elegant.
         self.comp_query = Linear()(
@@ -517,18 +520,29 @@ def sequence_mask(sequence_length, max_length=None):
 
 
 class BinaryTreeLSTMLayer(nn.Module):
-    def __init__(self, hidden_dim, composition_ln=False):
+    def __init__(self, hidden_dim, composition_ln=False, highway=False):
         super(BinaryTreeLSTMLayer, self).__init__()
         self.hidden_dim = hidden_dim
         self.comp_linear = Linear()(
             in_features=2 * hidden_dim,
             out_features=5 * hidden_dim)
         self.composition_ln = composition_ln
+        self.highway = highway
         if composition_ln:
             self.left_h_ln = LayerNormalization(hidden_dim)
             self.right_h_ln = LayerNormalization(hidden_dim)
             self.left_c_ln = LayerNormalization(hidden_dim)
             self.right_c_ln = LayerNormalization(hidden_dim)
+        if highway:
+            self.highway_layer = Linear(
+                initializer=HeKaimingInitializer)(
+                in_features=2 * hidden_dim,
+                out_features=2 * hidden_dim)
+            self.highway_gate = Linear(
+                initializer=HeKaimingInitializer)(
+                in_features=2 * hidden_dim,
+                out_features=2 * hidden_dim)
+            self.highway_gate.bias.data.fill_(-2.)
 
     def forward(self, l=None, r=None):
         """
@@ -553,6 +567,10 @@ class BinaryTreeLSTMLayer(nn.Module):
             cr = self.right_c_ln(cr)
 
         hlr_cat = torch.cat([hl, hr], dim=2)
+        if self.highway:
+            layer_result = F.tanh(self.highway_layer(hlr_cat))
+            gate = F.sigmoid(self.highway_gate(hlr_cat))
+            hlr_cat = torch.mul(layer_result, gate) + torch.mul(hlr_cat, (1. - gate))
         treelstm_vector = apply_nd(fn=self.comp_linear, input=hlr_cat)
         i, fl, fr, u, o = treelstm_vector.chunk(5, dim=2)
         c = (cl * (fl + 1).sigmoid() + cr * (fr + 1).sigmoid()
