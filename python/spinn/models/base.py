@@ -400,6 +400,10 @@ def get_flags():
         "pyramid_temperature_cycle_length",
         0.0,
         "For wake-sleep-style experiments. 0.0 disables this feature.")
+    gflags.DEFINE_boolean(
+        "choipyr_highway",
+        False,
+        "If set, use highway-TreeLSTM in ChoiPyramid.")
 
     # Encode settings.
     gflags.DEFINE_enum("encode",
