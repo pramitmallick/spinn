@@ -475,6 +475,12 @@ def get_flags():
         False,
         "Use the transition accuracy as the reward. For debugging only.")
 
+    # RNN Settings
+    gflags.DEFINE_boolean(
+        "model_bidirectional",
+        False,
+        "Use bidirectional recurrent network.")
+
     # MLP settings.
     gflags.DEFINE_integer(
         "mlp_dim",
