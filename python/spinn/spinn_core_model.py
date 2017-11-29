@@ -691,15 +691,28 @@ class BaseModel(nn.Module):
 
         b, l = example.tokens.size()[:2]
 
+        # Mask Padding Tokens Part 1
+        mask = (example.tokens != 0)
+
         embeds = self.embed(example.tokens)
         embeds = self.reshape_input(embeds, b, l)
         embeds = self.encode(embeds)
+
         embeds = self.reshape_context(embeds, b, l)
         self.forward_hook(embeds, b, l)
         embeds = F.dropout(
             embeds,
             self.embedding_dropout_rate,
             training=self.training)
+
+        # Mask Padding Tokens Part 2
+        embeds_shape = embeds.size()
+        embeds = embeds.view(b, l, -1)
+        embedsd = embeds.detach().clone()
+        mask = mask.view(b, l , 1).expand_as(embeds)
+        embedsd[mask] = embeds[mask]
+        embeds = embedsd
+        embeds = embeds.view(*embeds_shape)
 
         # Make Buffers
         # _embeds = torch.chunk(to_cpu(embeds), b, 0)
