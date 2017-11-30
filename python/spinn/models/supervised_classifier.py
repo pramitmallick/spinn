@@ -280,10 +280,8 @@ def train_loop(
             model, 'transition_loss') else None
 
         # Extract L2 Cost
-        # replaced with weight_decay in optimizer
-        # l2_loss = get_l2_loss(model, FLAGS.l2_lambda) if FLAGS.use_l2_loss else None
-        l2_loss = 0
-        l2_loss_data = 0
+        l2_loss = get_l2_loss(
+            model, FLAGS.l2_lambda) if FLAGS.use_l2_loss else None
 
         # Accumulate Total Loss Variable
         total_loss = 0.0
@@ -322,7 +320,7 @@ def train_loop(
 
         if step % FLAGS.statistics_interval_steps == 0:
             A.add('xent_cost', xent_loss.data[0])
-            A.add('l2_cost', l2_loss_data)
+            A.add('l2_cost', l2_loss.data[0])
             stats(model, optimizer, A, step, log_entry)
             should_log = True
             progress_bar.finish()
