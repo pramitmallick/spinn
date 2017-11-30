@@ -18,36 +18,53 @@ LABEL_MAP = {
 }
 
 
+def roundup2(N):
+    """ Round up using factors of 2. """
+    return int(2 ** math.ceil(math.log(N, 2)))
+
+
 def full_tokens(tokens):
     """
     Pads a sequence of tokens from the left so the resulting
     length is a factor of two.
     """
-    target_length = int(2 ** math.ceil(math.log(len(tokens), 2)))
+    target_length = roundup2(len(tokens))
     padding_length = target_length - len(tokens)
     tokens = [PADDING_TOKEN] * padding_length + tokens
     return tokens
 
 
-def full_transitions(N):
+def full_transitions(N, left_N=None, right_N=None):
     """
     Recursively creates a full binary tree of with N
     leaves using shift reduce transitions.
     """
 
-    N = float(N)
+    if N == 1:
+        return [0]
 
-    # Can not have a single word sentence.
-    assert N > 1
-
-    # Constrain to full binary trees.
-    assert math.log(N, 2) % 1 == 0, \
-        "Bad value. N={}".format(N)
-
-    if math.log(N, 2) == 1:
+    if N == 2:
         return [0, 0, 1]
 
-    return full_transitions(N/2) + full_transitions(N/2) + [1]
+    if left_N is None:
+        N = float(N)
+
+        # Constrain to full binary trees.
+        assert math.log(N, 2) % 1 == 0, \
+            "Bad value. N={}".format(N)
+
+        left_N = N / 2
+
+    if right_N is None:
+        rN = N - left_N
+        r_left_N = None
+        r_right_N = None
+    else:
+        rN = N - left_N
+        r_left_N = roundup2(rN) / 2
+        r_right_N = rN - r_left_N
+
+    return full_transitions(left_N) + full_transitions(rN, left_N=r_left_N, right_N=r_right_N) + [1]
 
 
 def balanced_transitions(N):
@@ -65,6 +82,17 @@ def balanced_transitions(N):
         right_N = N // 2
         left_N = N - right_N
         return balanced_transitions(left_N) + balanced_transitions(right_N) + [1]
+
+
+def convert_binary_bracketing_half_full(parse, lowercase=False):
+    # Modified to provided a "half-full" binary tree without padding.
+    tokens, transitions = convert_binary_bracketing(parse, lowercase)
+    if len(tokens) > 1:
+        _tokens = full_tokens(tokens)
+        left_N = len(_tokens) / 2
+        right_N = len(tokens) - left_N
+        transitions = full_transitions(len(tokens), left_N=left_N, right_N=right_N)
+    return tokens, transitions
 
 
 def convert_binary_bracketing_full(parse, lowercase=False):
@@ -106,6 +134,8 @@ def load_data(path, lowercase=False, choose=lambda x: True, mode='default'):
         convert = convert_binary_bracketing
     elif mode == 'full':
         convert = convert_binary_bracketing_full
+    elif mode == 'half_full':
+        convert = convert_binary_bracketing_half_full
     elif mode == 'balanced':
         convert = convert_binary_bracketing_balanced
     else:

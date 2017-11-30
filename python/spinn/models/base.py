@@ -383,7 +383,7 @@ def get_flags():
     # Fixed tree settings.
     gflags.DEFINE_enum(
         "transition_mode", "default", [
-            "default", "full", "balanced"], "Specify whether to use given" +\
+            "default", "full", "half_full", "balanced"], "Specify whether to use given" +\
             " binary parse trees or to use a fixed strategy.")
     gflags.DEFINE_boolean(
         "full_trees",
