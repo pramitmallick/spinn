@@ -34,7 +34,7 @@ def full_tokens(tokens):
     return tokens
 
 
-def full_transitions(N, left_N=None, right_N=None):
+def full_transitions(N, left_full=False, right_full=False):
     """
     Recursively creates a full binary tree of with N
     leaves using shift reduce transitions.
@@ -46,7 +46,9 @@ def full_transitions(N, left_N=None, right_N=None):
     if N == 2:
         return [0, 0, 1]
 
-    if left_N is None:
+    assert not (left_full and right_full), "Please only choose one."
+
+    if not left_full and not right_full:
         N = float(N)
 
         # Constrain to full binary trees.
@@ -54,17 +56,19 @@ def full_transitions(N, left_N=None, right_N=None):
             "Bad value. N={}".format(N)
 
         left_N = N / 2
+        right_N = N - left_N
 
-    if right_N is None:
-        rN = N - left_N
-        r_left_N = None
-        r_right_N = None
-    else:
-        rN = N - left_N
-        r_left_N = roundup2(rN) / 2
-        r_right_N = rN - r_left_N
+    if left_full:
+        left_N = roundup2(N) / 2
+        right_N = N - left_N
 
-    return full_transitions(left_N) + full_transitions(rN, left_N=r_left_N, right_N=r_right_N) + [1]
+    if right_full:
+        right_N = roundup2(N) / 2
+        left_N = N - right_N
+
+    return full_transitions(left_N, left_full=left_full, right_full=right_full) + \
+           full_transitions(right_N, left_full=left_full, right_full=right_full) + \
+           [1]
 
 
 def balanced_transitions(N):
@@ -88,10 +92,17 @@ def convert_binary_bracketing_half_full(parse, lowercase=False):
     # Modified to provided a "half-full" binary tree without padding.
     tokens, transitions = convert_binary_bracketing(parse, lowercase)
     if len(tokens) > 1:
-        _tokens = full_tokens(tokens)
-        left_N = len(_tokens) / 2
-        right_N = len(tokens) - left_N
-        transitions = full_transitions(len(tokens), left_N=left_N, right_N=right_N)
+        transitions = full_transitions(len(tokens), left_full=True)
+    return tokens, transitions
+
+
+def convert_binary_bracketing_half_full_right(parse, lowercase=False):
+    # Modified to provided a "half-full" binary tree without padding.
+    # Difference between the other method is the right subtrees are
+    # the half full ones.
+    tokens, transitions = convert_binary_bracketing(parse, lowercase)
+    if len(tokens) > 1:
+        transitions = full_transitions(len(tokens), right_full=True)
     return tokens, transitions
 
 
@@ -136,6 +147,8 @@ def load_data(path, lowercase=False, choose=lambda x: True, mode='default'):
         convert = convert_binary_bracketing_full
     elif mode == 'half_full':
         convert = convert_binary_bracketing_half_full
+    elif mode == 'half_full_right':
+        convert = convert_binary_bracketing_half_full_right
     elif mode == 'balanced':
         convert = convert_binary_bracketing_balanced
     else:
