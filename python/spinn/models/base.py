@@ -378,6 +378,10 @@ def get_flags():
         True,
         "Use tracking lstm output as input for the reduce function.")
     gflags.DEFINE_boolean(
+        "spinn_highway",
+        False,
+        "Add a highway layer before the application of the TreeLSTM layer.")
+    gflags.DEFINE_boolean(
         "composition_ln",
         True,
         "When True, layer normalization is used in TreeLSTM composition.")
@@ -700,6 +704,7 @@ def init_model(
     composition_args.lateral_tracking = FLAGS.lateral_tracking
     composition_args.tracking_ln = FLAGS.tracking_ln
     composition_args.use_tracking_in_composition = FLAGS.use_tracking_in_composition
+    composition_args.spinn_highway = FLAGS.spinn_highway
     composition_args.size = FLAGS.model_dim
     composition_args.tracker_size = FLAGS.tracking_lstm_hidden_dim
     composition_args.use_internal_parser = FLAGS.use_internal_parser
@@ -723,6 +728,7 @@ def init_model(
             FLAGS.model_dim / 2,
             tracker_size=FLAGS.tracking_lstm_hidden_dim,
             use_tracking_in_composition=FLAGS.use_tracking_in_composition,
+            highway=FLAGS.spinn_highway,
             composition_ln=FLAGS.composition_ln)
     elif FLAGS.reduce == "tanh":
         class ReduceTanh(nn.Module):
