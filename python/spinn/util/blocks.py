@@ -577,20 +577,25 @@ class ReduceTreeLSTM(nn.Module):
     """
 
     def __init__(self, size, tracker_size=None,
-                 use_tracking_in_composition=None, composition_ln=True):
+                 use_tracking_in_composition=None, composition_ln=True, highway=False):
         super(ReduceTreeLSTM, self).__init__()
-        self.composition_ln = composition_ln
-        self.left = Linear()(size, 5 * size)
-        self.right = Linear()(
-            size, 5 * size, bias=False)
-        if composition_ln:
-            self.left_ln = LayerNormalization(size)
-            self.right_ln = LayerNormalization(size)
+        input_size = 2 * size
+        self.use_tracking_in_composition = use_tracking_in_composition
         if tracker_size is not None and use_tracking_in_composition:
-            self.track = Linear()(
-                tracker_size, 5 * size, bias=False)
-            if composition_ln:
-                self.track_ln = LayerNormalization(tracker_size)
+            input_size += tracker_size
+        self.layer = Linear(initializer=HeKaimingInitializer)(input_size, 5 * size)
+        self.composition_ln = composition_ln
+        if composition_ln:
+            self.ln = LayerNormalization(input_size)
+        self.highway = highway
+        if highway:
+            self.highway_layer = Linear()(
+                in_features=input_size,
+                out_features=input_size)
+            self.highway_gate = Linear()(
+                in_features=input_size,
+                out_features=input_size)
+            self.highway_gate.bias.data.fill_(-2.)
 
     def forward(self, left_in, right_in, tracking=None):
         """Perform batched TreeLSTM composition.
@@ -621,21 +626,19 @@ class ReduceTreeLSTM(nn.Module):
         """
         left, right = bundle(left_in), bundle(right_in)
         tracking = bundle(tracking)
-
-        if self.composition_ln:
-            lstm_in = self.left(self.left_ln(left.h))
-            lstm_in += self.right(self.right_ln(right.h))
+        if self.use_tracking_in_composition:
+            inp = torch.cat([left.h, right.h, tracking.h], 1)
         else:
-            lstm_in = self.left(left.h)
-            lstm_in += self.right(right.h)
+            inp = torch.cat([left.h, right.h], 1)
+        if self.composition_ln:
+            inp = self.ln(inp)
+        if self.highway:
+            highway_layer_result = F.tanh(self.highway_layer(inp))
+            gate = F.sigmoid(self.highway_gate(inp))
+            inp = torch.mul(highway_layer_result, gate) + torch.mul(inp, (1. - gate))
+        lstm_gates = self.layer(inp)
 
-        if hasattr(self, 'track'):
-            if self.composition_ln:
-                lstm_in += self.track(self.track_ln(tracking.h))
-            else:
-                lstm_in += self.track(tracking.h)
-
-        return unbundle(treelstm(left.c, right.c, lstm_in))
+        return unbundle(treelstm(left.c, right.c, lstm_gates))
 
 
 class MLP(nn.Module):
