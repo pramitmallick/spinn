@@ -30,6 +30,16 @@ def debug_gradient(model, losses):
         model.zero_grad()
 
 
+def reverse_tensor(var, dim):
+    dim_size = var.size(dim)
+    index = [i for i in range(dim_size - 1, -1, -1)]
+    index = torch.LongTensor(index)
+    if isinstance(var, Variable):
+        index = to_gpu(Variable(index, volatile=var.volatile))
+    inverted_tensor = var.index_select(dim, index)
+    return inverted_tensor
+
+
 def flatten(l):
     if hasattr(l, '__len__'):
         return reduce(lambda x, y: x + flatten(y), l, [])
@@ -43,10 +53,19 @@ def the_gpu():
 
 the_gpu.gpu = -1
 
-def to_gpu(var):
-    if the_gpu.gpu >= 0:
-        return var.cuda(the_gpu.gpu)
+
+def to_cuda(var, gpu):
+    if gpu >= 0:
+        return var.cuda()
     return var
+
+
+def to_gpu(var):
+    return to_cuda(var, the_gpu())
+
+
+def to_cpu(var):
+    return to_cuda(var, -1)
 
 
 class LSTMState:
@@ -93,7 +112,7 @@ class LSTMState:
     def both(self):
         if not hasattr(self, '_both'):
             self._both = torch.cat(
-                (self._c.cpu(), self._h.cpu()), 1)
+                (to_cpu(self._c), to_cpu(self._h)), 1)
         return self._both
 
 
