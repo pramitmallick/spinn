@@ -583,29 +583,16 @@ class ReduceTreeLSTM(nn.Module):
         self.use_tracking_in_composition = use_tracking_in_composition
         if tracker_size is not None and use_tracking_in_composition:
             input_size += tracker_size
-<<<<<<< HEAD
         self.layer = Linear()(input_size, 5 * size)
-=======
-        self.layer = Linear(initializer=HeKaimingInitializer)(input_size, 5 * size)
->>>>>>> origin/highway_tweak
         self.composition_ln = composition_ln
         if composition_ln:
             self.ln = LayerNormalization(input_size)
         self.highway = highway
         if highway:
-<<<<<<< HEAD
             self.highway_layer = Linear()(
                 in_features=input_size,
                 out_features=input_size)
             self.highway_gate = Linear()(
-=======
-            self.highway_layer = Linear(
-                initializer=HeKaimingInitializer)(
-                in_features=input_size,
-                out_features=input_size)
-            self.highway_gate = Linear(
-                initializer=HeKaimingInitializer)(
->>>>>>> origin/highway_tweak
                 in_features=input_size,
                 out_features=input_size)
             self.highway_gate.bias.data.fill_(-2.)
@@ -643,59 +630,6 @@ class ReduceTreeLSTM(nn.Module):
             inp = torch.cat([left.h, right.h, tracking.h], 1)
         else:
             inp = torch.cat([left.h, right.h], 1)
-<<<<<<< HEAD
-=======
-        if self.composition_ln:
-            inp = self.ln(inp)
-        if self.highway:
-            highway_layer_result = F.tanh(self.highway_layer(inp))
-            gate = F.sigmoid(self.highway_gate(inp))
-            inp = torch.mul(highway_layer_result, gate) + torch.mul(inp, (1. - gate))
-        lstm_gates = self.layer(inp)
-
-        return unbundle(treelstm(left.c, right.c, lstm_gates))
-
-
-class SimpleTreeLSTM(nn.Module):
-    """TreeLSTM composition module for Pyramid.
-
-    The TreeLSTM has two inputs: the left and right children being composed.
-
-    Args:
-        size: The size of the model state.
-        composition_ln: Whether to use layer normalization.
-    """
-
-    def __init__(self, size, composition_ln=True):
-        super(SimpleTreeLSTM, self).__init__()
-        self.composition_ln = composition_ln
-        self.hidden_dim = size
-        self.left = Linear(initializer=HeKaimingInitializer)(size, 5 * size)
-        self.right = Linear(
-            initializer=HeKaimingInitializer)(
-            size, 5 * size, bias=False)
-        if composition_ln:
-            self.left_ln = LayerNormalization(size)
-            self.right_ln = LayerNormalization(size)
-
-    def forward(self, left, right):
-        """Perform batched TreeLSTM composition.
-
-        Args:
-            left: A B-by-(2 x D) tensor containing h and c states.
-            right: A B-by-(2 x D) tensor containing h and c states.
-
-        Returns:
-            out: A B-by-(2 x D) tensor containing h and c states.
-
-        """
-
-        left_h = get_h(left, self.hidden_dim)
-        left_c = get_c(left, self.hidden_dim)
-        right_h = get_h(right, self.hidden_dim)
-        right_c = get_c(right, self.hidden_dim)
-
->>>>>>> origin/highway_tweak
         if self.composition_ln:
             inp = self.ln(inp)
         if self.highway:
