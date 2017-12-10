@@ -583,7 +583,7 @@ class ReduceTreeLSTM(nn.Module):
         self.use_tracking_in_composition = use_tracking_in_composition
         if tracker_size is not None and use_tracking_in_composition:
             input_size += tracker_size
-        self.layer = Linear(initializer=HeKaimingInitializer)(input_size, 5 * size)
+        self.layer = Linear()(input_size, 5 * size)
         self.composition_ln = composition_ln
         if composition_ln:
             self.ln = LayerNormalization(input_size)
