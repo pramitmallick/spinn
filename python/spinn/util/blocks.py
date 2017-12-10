@@ -583,16 +583,29 @@ class ReduceTreeLSTM(nn.Module):
         self.use_tracking_in_composition = use_tracking_in_composition
         if tracker_size is not None and use_tracking_in_composition:
             input_size += tracker_size
+<<<<<<< HEAD
         self.layer = Linear()(input_size, 5 * size)
+=======
+        self.layer = Linear(initializer=HeKaimingInitializer)(input_size, 5 * size)
+>>>>>>> origin/highway_tweak
         self.composition_ln = composition_ln
         if composition_ln:
             self.ln = LayerNormalization(input_size)
         self.highway = highway
         if highway:
+<<<<<<< HEAD
             self.highway_layer = Linear()(
                 in_features=input_size,
                 out_features=input_size)
             self.highway_gate = Linear()(
+=======
+            self.highway_layer = Linear(
+                initializer=HeKaimingInitializer)(
+                in_features=input_size,
+                out_features=input_size)
+            self.highway_gate = Linear(
+                initializer=HeKaimingInitializer)(
+>>>>>>> origin/highway_tweak
                 in_features=input_size,
                 out_features=input_size)
             self.highway_gate.bias.data.fill_(-2.)
@@ -630,6 +643,8 @@ class ReduceTreeLSTM(nn.Module):
             inp = torch.cat([left.h, right.h, tracking.h], 1)
         else:
             inp = torch.cat([left.h, right.h], 1)
+<<<<<<< HEAD
+=======
         if self.composition_ln:
             inp = self.ln(inp)
         if self.highway:
