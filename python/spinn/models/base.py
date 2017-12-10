@@ -704,7 +704,7 @@ def init_model(
     # GPU support.
     the_gpu.gpu = FLAGS.gpu
     if FLAGS.gpu >= 0:
-        for name, child in module.named_children():
+        for name, child in model.named_children():
             if "embed" not in name:
                 model.cuda()
 
