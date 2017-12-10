@@ -348,10 +348,11 @@ class Embed(nn.Module):
         else:
             embeds = self.vectors.take(
                 tokens.data.cpu().numpy().ravel(), axis=0)
-            embeds = to_gpu(
-                Variable(
+            embeds = Variable(
                     torch.from_numpy(embeds),
-                    volatile=tokens.volatile))
+                    volatile=tokens.volatile)
+        print self.embed.weight
+        print embeds
         return to_gpu(embeds)
 
 
