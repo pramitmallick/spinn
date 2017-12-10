@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 
-from spinn.util.blocks import Embed, to_gpu, MLP
+from spinn.util.blocks import Embed, MLP
 from spinn.util.misc import Args, Vocab
 
 
@@ -151,10 +151,9 @@ class BaseModel(nn.Module):
         x_hyp = sentences[:, :, 1]
         x = np.concatenate([x_prem, x_hyp], axis=0)
 
-        return to_gpu(
-            Variable(
+        return Variable(
                 torch.from_numpy(x),
-                volatile=not self.training))
+                volatile=not self.training)
 
     def wrap_sentence_pair(self, hh):
         batch_size = hh.size(0) / 2
@@ -164,10 +163,9 @@ class BaseModel(nn.Module):
     # --- Sentence Pair Specific ---
 
     def unwrap_sentence(self, sentences, transitions):
-        return to_gpu(
-            Variable(
+        return Variable(
                 torch.from_numpy(sentences),
-                volatile=not self.training))
+                volatile=not self.training)
 
     def wrap_sentence(self, hh):
         return hh
