@@ -354,10 +354,6 @@ class Embed(nn.Module):
                     volatile=tokens.volatile))
         return to_gpu(embeds)
 
-    def cuda():
-        print "Not moving embeddings to GPU."
-        return   
-
 
 class GRU(nn.Module):
     def __init__(self, inp_dim, model_dim, num_layers=1,

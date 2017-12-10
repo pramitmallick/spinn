@@ -700,6 +700,13 @@ def init_model(
     model = build_model(data_manager, initial_embeddings, vocab_size,
                         num_classes, FLAGS, context_args, composition_args)
 
+    # GPU support.
+    the_gpu.gpu = FLAGS.gpu
+    if FLAGS.gpu >= 0:
+        for name, child in module.named_children():
+            if "embed" not in name:
+                model.cuda()
+
     # Build optimizer.
     optimizer = optim.Adam([param for name, param in model.named_parameters() if name not in ["embed.embed.weight"]], lr=FLAGS.learning_rate, 
         betas=(0.9, 0.999), eps=1e-08)
