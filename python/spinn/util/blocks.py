@@ -351,8 +351,6 @@ class Embed(nn.Module):
             embeds = Variable(
                     torch.from_numpy(embeds),
                     volatile=tokens.volatile)
-        print self.embed.weight
-        print embeds
         return to_gpu(embeds)
 
 
