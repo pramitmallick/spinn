@@ -352,7 +352,11 @@ class Embed(nn.Module):
                 Variable(
                     torch.from_numpy(embeds),
                     volatile=tokens.volatile))
-        return embeds
+        return to_gpu(embeds)
+
+    def cuda():
+        print "Not moving embeddings to GPU."
+        return   
 
 
 class GRU(nn.Module):
