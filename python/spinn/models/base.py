@@ -704,9 +704,8 @@ def init_model(
     # GPU support.
     the_gpu.gpu = FLAGS.gpu
     if FLAGS.gpu >= 0:
-        for name, child in model.named_children():
-            if "embed" not in name:
-                model.cuda()
+        model.cuda()
+        model.embed.cpu()  # TODO: This is an inefficient workaround.
 
     # Build optimizer.
     optimizer = optim.Adam([param for name, param in model.named_parameters() if name not in ["embed.embed.weight"]], lr=FLAGS.learning_rate, 
