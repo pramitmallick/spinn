@@ -19,6 +19,7 @@ from spinn.data.sst import load_sst_data, load_sst_binary_data
 from spinn.data.nli import load_nli_data
 from spinn.util.blocks import ModelTrainer, bundle
 from spinn.util.blocks import EncodeGRU, IntraAttention, Linear, ReduceTreeGRU, ReduceTreeLSTM
+from spinn.util.blocks import the_gpu, to_gpu
 from spinn.util.misc import Args
 from spinn.util.logparse import parse_flags
 
