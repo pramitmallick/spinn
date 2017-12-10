@@ -520,6 +520,11 @@ def sequence_mask(sequence_length, max_length=None):
 
 
 class BinaryTreeLSTMLayer(nn.Module):
+<<<<<<< HEAD
+=======
+    # TODO: Unify with SimpleTreeLSTM
+
+>>>>>>> origin/highway_tweak
     def __init__(self, hidden_dim, composition_ln=False, highway=False):
         super(BinaryTreeLSTMLayer, self).__init__()
         self.hidden_dim = hidden_dim
