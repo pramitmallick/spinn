@@ -626,7 +626,7 @@ class ReduceTreeLSTM(nn.Module):
         """
         left, right = bundle(left_in), bundle(right_in)
         tracking = bundle(tracking)
-        if self.use_tracking_in_composition:
+        if self.use_tracking_in_composition and tracking:
             inp = torch.cat([left.h, right.h, tracking.h], 1)
         else:
             inp = torch.cat([left.h, right.h], 1)
