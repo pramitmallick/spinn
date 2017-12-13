@@ -9,8 +9,8 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "big_enc"
-SWEEP_RUNS = 5
+NAME = "big_enc_5"
+SWEEP_RUNS = 12
 
 LIN = "LIN"
 EXP = "EXP"
@@ -37,32 +37,33 @@ FLAGS(sys.argv)
 # Non-tunable flags that must be passed in.
 
 FIXED_PARAMETERS = {
+    "training_data_path":    FLAGS.training_data_path,
+    "eval_data_path":    FLAGS.eval_data_path,
+    "embedding_data_path": FLAGS.embedding_data_path,
+    "log_path": FLAGS.log_path,
+    "ckpt_path":  FLAGS.log_path,
     "data_type":     "nli",
-    "model_type":      "ChoiPyramid",
+    "model_type":      "SPINN",
     "word_embedding_dim":   "300",
     "model_dim":   "1200",
-    "seq_length":   "80",
+    "seq_length":   "160",
     "eval_seq_length":  "810",
     "eval_interval_steps": "1000",
     "sample_interval_steps": "1000",
-    "statistics_interval_steps": "100",
-    "batch_size":  "32",
     "encode": "gru",
     "encode_bidirectional": "", 
-    "num_mlp_layers": "1",
-    "mlp_dim": "1024",
-    #"nocomposition_ln": "",
-    "embedding_keep_rate": "1.0",
-    "pyramid_trainable_temperature": "",
-    "learning_rate_decay_per_10k_steps": "1.0",
-    "pyramid_temperature_decay_per_10k_steps": "1.0", 
+    "mlp_dim": "512",
+    "nocomposition_ln": "",
+    "fine_tune_loaded_embeddings": ""
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
     "semantic_classifier_keep_rate": ("skr", LIN, 0.5, 1.0),
-    "l2_lambda":          ("l2l", EXP, 3e-9, 3e-6),
+    "l2_lambda":          ("l2l", EXP, 3e-9, 1e-6),
     "learning_rate": ("lr", EXP, 0.00003, 0.001),
+    "spinn_highway": ("sh", BOOL, None, None),
+    "model_dim": ("md", CHOICE, ["600", "800", "1200", "1600", "2400"], None),
 }
 
 
