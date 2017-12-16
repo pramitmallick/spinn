@@ -6,13 +6,11 @@ import numpy as np
 # PyTorch
 import torch
 import torch.nn as nn
-from torch.nn import init
 from torch.autograd import Variable
 import torch.nn.functional as F
-from torch.nn.init import kaiming_normal
 
 from spinn.util.blocks import Embed, to_gpu, MLP, Linear, LayerNormalization
-from spinn.util.misc import Args, Vocab
+from spinn.util.misc import Vocab
 
 
 def build_model(data_manager, initial_embeddings, vocab_size,
@@ -20,25 +18,26 @@ def build_model(data_manager, initial_embeddings, vocab_size,
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
     model_cls = ChoiPyramid
 
-    return model_cls(model_dim=FLAGS.model_dim,
-                     word_embedding_dim=FLAGS.word_embedding_dim,
-                     vocab_size=vocab_size,
-                     initial_embeddings=initial_embeddings,
-                     fine_tune_loaded_embeddings=FLAGS.fine_tune_loaded_embeddings,
-                     num_classes=num_classes,
-                     embedding_keep_rate=FLAGS.embedding_keep_rate,
-                     use_sentence_pair=use_sentence_pair,
-                     use_difference_feature=FLAGS.use_difference_feature,
-                     use_product_feature=FLAGS.use_product_feature,
-                     classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
-                     mlp_dim=FLAGS.mlp_dim,
-                     num_mlp_layers=FLAGS.num_mlp_layers,
-                     mlp_ln=FLAGS.mlp_ln,
-                     composition_ln=FLAGS.composition_ln,
-                     context_args=context_args,
-                     trainable_temperature=FLAGS.pyramid_trainable_temperature,
-                     highway=FLAGS.choipyr_highway,
-                     )
+    return model_cls(
+        model_dim=FLAGS.model_dim,
+        word_embedding_dim=FLAGS.word_embedding_dim,
+        vocab_size=vocab_size,
+        initial_embeddings=initial_embeddings,
+        fine_tune_loaded_embeddings=FLAGS.fine_tune_loaded_embeddings,
+        num_classes=num_classes,
+        embedding_keep_rate=FLAGS.embedding_keep_rate,
+        use_sentence_pair=use_sentence_pair,
+        use_difference_feature=FLAGS.use_difference_feature,
+        use_product_feature=FLAGS.use_product_feature,
+        classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
+        mlp_dim=FLAGS.mlp_dim,
+        num_mlp_layers=FLAGS.num_mlp_layers,
+        mlp_ln=FLAGS.mlp_ln,
+        composition_ln=FLAGS.composition_ln,
+        context_args=context_args,
+        trainable_temperature=FLAGS.pyramid_trainable_temperature,
+        highway=FLAGS.choipyr_highway,
+    )
 
 
 class ChoiPyramid(nn.Module):
@@ -86,7 +85,7 @@ class ChoiPyramid(nn.Module):
 
         self.binary_tree_lstm = BinaryTreeLSTM(
             word_embedding_dim,
-            model_dim / 2,
+            model_dim // 2,
             False,
             composition_ln=composition_ln,
             trainable_temperature=trainable_temperature,
@@ -157,12 +156,12 @@ class ChoiPyramid(nn.Module):
         return output
 
     def get_features_dim(self):
-        features_dim = self.model_dim if self.use_sentence_pair else self.model_dim / 2
+        features_dim = self.model_dim if self.use_sentence_pair else self.model_dim // 2
         if self.use_sentence_pair:
             if self.use_difference_feature:
-                features_dim += self.model_dim / 2
+                features_dim += self.model_dim // 2
             if self.use_product_feature:
-                features_dim += self.model_dim / 2
+                features_dim += self.model_dim // 2
         return features_dim
 
     def build_features(self, h):
@@ -189,9 +188,9 @@ class ChoiPyramid(nn.Module):
 
         token_sequences = []
         batch_size = x.shape[0]
-        for s in (range(int(self.use_sentence_pair) + 1)
+        for s in (list(range(int(self.use_sentence_pair) + 1))
                   if not only_one else [0]):
-            for b in (range(batch_size) if not only_one else [0]):
+            for b in (list(range(batch_size)) if not only_one else [0]):
                 if self.use_sentence_pair:
                     token_sequence = [self.inverted_vocabulary[token]
                                       for token in x[b, :, s]]
@@ -246,7 +245,7 @@ class ChoiPyramid(nn.Module):
             x), volatile=not self.training)), lengths
 
     def wrap_sentence_pair(self, hh):
-        batch_size = hh.size(0) / 2
+        batch_size = hh.size(0) // 2
         h = ([hh[:batch_size], hh[batch_size:]])
         return h
 

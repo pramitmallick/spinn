@@ -10,9 +10,8 @@ import numpy as np
 
 from spinn.util import afs_safe_logger
 from spinn.util.data import SimpleProgressBar
-from spinn.util.blocks import the_gpu, to_gpu
+from spinn.util.blocks import to_gpu
 from spinn.util.misc import Accumulator, EvalReporter
-from spinn.util.misc import recursively_set_device
 from spinn.util.logging import stats, train_accumulate, create_log_formatter
 from spinn.util.logging import eval_stats, eval_accumulate, prettyprint_trees
 from spinn.util.loss import auxiliary_loss
@@ -24,12 +23,10 @@ import spinn.util.logging_pb2 as pb
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-import torch.nn.functional as F
 
 
 from spinn.models.base import get_data_manager, get_flags, get_batch
-from spinn.models.base import flag_defaults, init_model
-from spinn.models.base import get_checkpoint_path, log_path
+from spinn.models.base import flag_defaults, init_model, log_path
 from spinn.models.base import load_data_and_embeddings
 
 
@@ -37,11 +34,11 @@ FLAGS = gflags.FLAGS
 
 
 def evaluate(FLAGS, model, eval_set, log_entry,
-             logger, step, vocabulary=None, show_sample=False, eval_index=0):
+             logger, trainer, vocabulary=None, show_sample=False, eval_index=0):
     filename, dataset = eval_set
 
     A = Accumulator()
-    index = len(log_entry.evaluation)
+    len(log_entry.evaluation)
     eval_log = log_entry.evaluation.add()
     reporter = EvalReporter()
     tree_strs = None
@@ -58,11 +55,11 @@ def evaluate(FLAGS, model, eval_set, log_entry,
 
     if FLAGS.model_type in ["ChoiPyramid"]:
         pyramid_temperature_multiplier = FLAGS.pyramid_temperature_decay_per_10k_steps ** (
-            step / 10000.0)
+            trainer.step / 10000.0)
         if FLAGS.pyramid_temperature_cycle_length > 0.0:
             min_temp = 1e-5
             pyramid_temperature_multiplier *= (
-                math.cos((step) / FLAGS.pyramid_temperature_cycle_length) + 1 + min_temp) / 2
+                math.cos((trainer.step) / FLAGS.pyramid_temperature_cycle_length) + 1 + min_temp) / 2
     else:
         pyramid_temperature_multiplier = None
 
@@ -176,35 +173,13 @@ def evaluate(FLAGS, model, eval_set, log_entry,
 def train_loop(
         FLAGS,
         model,
-        optimizer,
-        sparse_optimizer,
         trainer,
         training_data_iter,
         eval_iterators,
         logger,
-        step,
-        best_dev_error,
-        best_dev_step,
         vocabulary):
     # Accumulate useful statistics.
     A = Accumulator(maxlen=FLAGS.deque_length)
-
-    # Checkpoint paths.
-    standard_checkpoint_path = get_checkpoint_path(
-        FLAGS.ckpt_path, FLAGS.experiment_name)
-    best_checkpoint_path = get_checkpoint_path(
-        FLAGS.ckpt_path, FLAGS.experiment_name, best=True)
-
-    # Build log format strings.
-    model.train()
-    X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = get_batch(
-        training_data_iter.next())
-    model(X_batch, transitions_batch, y_batch,
-          use_internal_parser=FLAGS.use_internal_parser,
-          validate_transitions=FLAGS.validate_transitions,
-          pyramid_temperature_multiplier=1.0,
-          example_lengths=num_transitions_batch
-          )
 
     # Train.
     logger.Log("Training.")
@@ -217,8 +192,8 @@ def train_loop(
     progress_bar.step(i=0, total=FLAGS.statistics_interval_steps)
 
     log_entry = pb.SpinnEntry()
-    for step in range(step, FLAGS.training_steps):
-        if (step - best_dev_step) > FLAGS.early_stopping_steps_to_wait:
+    for _ in range(trainer.step, FLAGS.training_steps):
+        if (trainer.step - trainer.best_dev_step) > FLAGS.early_stopping_steps_to_wait:
             logger.Log('No improvement after ' +
                        str(FLAGS.early_stopping_steps_to_wait) +
                        ' steps. Stopping training.')
@@ -226,29 +201,27 @@ def train_loop(
 
         model.train()
         log_entry.Clear()
-        log_entry.step = step
+        log_entry.step = trainer.step
         should_log = False
 
         start = time.time()
 
-        batch = get_batch(training_data_iter.next())
+        batch = get_batch(next(training_data_iter))
         X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = batch
 
         total_tokens = sum(
             [(nt + 1) / 2 for nt in num_transitions_batch.reshape(-1)])
 
         # Reset cached gradients.
-        optimizer.zero_grad()
-        if sparse_optimizer is not None:
-            sparse_optimizer.zero_grad()
+        trainer.optimizer_zero_grad()
 
         if FLAGS.model_type in ["ChoiPyramid"]:
             pyramid_temperature_multiplier = FLAGS.pyramid_temperature_decay_per_10k_steps ** (
-                step / 10000.0)
+                trainer.step / 10000.0)
             if FLAGS.pyramid_temperature_cycle_length > 0.0:
                 min_temp = 1e-5
                 pyramid_temperature_multiplier *= (
-                    math.cos((step) / FLAGS.pyramid_temperature_cycle_length) + 1 + min_temp) / 2
+                    math.cos((trainer.step) / FLAGS.pyramid_temperature_cycle_length) + 1 + min_temp) / 2
         else:
             pyramid_temperature_multiplier = None
 
@@ -290,15 +263,8 @@ def train_loop(
         # Hard Gradient Clipping
         nn.utils.clip_grad_norm([param for name, param in model.named_parameters() if name not in ["embed.embed.weight"]], FLAGS.clipping_max_value)
 
-        # Learning Rate Decay
-        if FLAGS.actively_decay_learning_rate:
-            optimizer.lr = FLAGS.learning_rate * \
-                (FLAGS.learning_rate_decay_per_10k_steps ** (step / 10000.0))
-
         # Gradient descent step.
-        optimizer.step()
-        if sparse_optimizer is not None:
-            sparse_optimizer.step()
+        trainer.optimizer_step()
 
         end = time.time()
 
@@ -309,13 +275,13 @@ def train_loop(
         A.add('total_tokens', total_tokens)
         A.add('total_time', total_time)
 
-        if step % FLAGS.statistics_interval_steps == 0:
+        if trainer.step % FLAGS.statistics_interval_steps == 0:
             A.add('xent_cost', xent_loss.data[0])
-            stats(model, optimizer, A, step, log_entry)
+            stats(model, trainer, A, log_entry)
             should_log = True
             progress_bar.finish()
 
-        if step % FLAGS.sample_interval_steps == 0 and FLAGS.num_samples > 0:
+        if trainer.step % FLAGS.sample_interval_steps == 0 and FLAGS.num_samples > 0:
             should_log = True
             model.train()
             model(
@@ -345,7 +311,7 @@ def train_loop(
 
             # This could be done prior to running the batch for a tiny speed
             # boost.
-            t_idxs = range(FLAGS.num_samples)
+            t_idxs = list(range(FLAGS.num_samples))
             random.shuffle(t_idxs)
             t_idxs = sorted(t_idxs[:FLAGS.num_samples])
             for t_idx in t_idxs:
@@ -363,43 +329,28 @@ def train_loop(
                 log.gold_lb = "".join(map(str, gold))
                 log.pred_tr = "".join(map(str, pred_tr))
                 log.pred_ev = "".join(map(str, pred_ev))
-                log.strg_tr = strength_tr[1:].encode('utf-8')
-                log.strg_ev = strength_ev[1:].encode('utf-8')
+                log.strg_tr = strength_tr[1:]
+                log.strg_ev = strength_ev[1:]
 
-        if step > 0 and step % FLAGS.eval_interval_steps == 0:
+        if trainer.step > 0 and trainer.step % FLAGS.eval_interval_steps == 0:
             should_log = True
             for index, eval_set in enumerate(eval_iterators):
                 acc, _ = evaluate(
-                    FLAGS, model, eval_set, log_entry, logger, step, show_sample=(
-                        step %
+                    FLAGS, model, eval_set, log_entry, logger, trainer, show_sample=(
+                        trainer.step %
                         FLAGS.sample_interval_steps == 0), vocabulary=vocabulary, eval_index=index)
-                if FLAGS.ckpt_on_best_dev_error and index == 0 and (
-                        1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
-                    best_dev_error = 1 - acc
-                    best_dev_step = step
-                    logger.Log(
-                        "Checkpointing with new best dev accuracy of %f" %
-                        acc)
-                    trainer.save(
-                        best_checkpoint_path,
-                        step,
-                        best_dev_error,
-                        best_dev_step)
+                if  index == 0:
+                    trainer.new_dev_accuracy(acc)
             progress_bar.reset()
 
-        if step > FLAGS.ckpt_step and step % FLAGS.ckpt_interval_steps == 0:
+        if trainer.step > FLAGS.ckpt_step and trainer.step % FLAGS.ckpt_interval_steps == 0:
             should_log = True
-            logger.Log("Checkpointing.")
-            trainer.save(
-                standard_checkpoint_path,
-                step,
-                best_dev_error,
-                best_dev_step)
+            trainer.checkpoint()
 
         if should_log:
             logger.LogEntry(log_entry)
 
-        progress_bar.step(i=(step % FLAGS.statistics_interval_steps) + 1,
+        progress_bar.step(i=(trainer.step % FLAGS.statistics_interval_steps) + 1,
                           total=FLAGS.statistics_interval_steps)
 
 
@@ -413,14 +364,9 @@ def run(only_forward=False):
 
     logger.Log("Flag Values:\n" +
                json.dumps(FLAGS.FlagValuesDict(), indent=4, sort_keys=True))
-    flags_dict = sorted(list(FLAGS.FlagValuesDict().items()))
-    for k, v in flags_dict:
-        flag = header.flags.add()
-        flag.key = k
-        flag.value = str(v)
 
     # Get Data and Embeddings
-    vocabulary, initial_embeddings, training_data_iter, eval_iterators = \
+    vocabulary, initial_embeddings, training_data_iter, eval_iterators, training_data_length = \
         load_data_and_embeddings(FLAGS, data_manager, logger,
                                  FLAGS.training_data_path, FLAGS.eval_data_path)
 
@@ -428,49 +374,12 @@ def run(only_forward=False):
     vocab_size = len(vocabulary)
     num_classes = len(set(data_manager.LABEL_MAP.values()))
 
-    model, optimizer, sparse_optimizer, trainer = init_model(
+    model, trainer = init_model(
         FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_manager, header)
+    trainer.set_epoch_length(int(training_data_length / FLAGS.batch_size))
 
-    standard_checkpoint_path = get_checkpoint_path(
-        FLAGS.ckpt_path, FLAGS.experiment_name)
-    best_checkpoint_path = get_checkpoint_path(
-        FLAGS.ckpt_path, FLAGS.experiment_name, best=True)
-
-    # Load checkpoint if available.
-    if FLAGS.load_best and os.path.isfile(best_checkpoint_path):
-        logger.Log("Found best checkpoint, restoring.")
-        step, best_dev_error, best_dev_step = trainer.load(
-            best_checkpoint_path, cpu=FLAGS.gpu < 0)
-        logger.Log(
-            "Resuming at step: {} with best dev accuracy: {}".format(
-                step, 1. - best_dev_error))
-    elif os.path.isfile(standard_checkpoint_path):
-        logger.Log("Found checkpoint, restoring.")
-        step, best_dev_error, best_dev_step = trainer.load(
-            standard_checkpoint_path, cpu=FLAGS.gpu < 0)
-        logger.Log(
-            "Resuming at step: {} with best dev accuracy: {}".format(
-                step, 1. - best_dev_error))
-    else:
-        assert not only_forward, "Can't run an eval-only run without a checkpoint. Supply a checkpoint."
-        step = 0
-        best_dev_error = 1.0
-        best_dev_step = 0
-    header.start_step = step
+    header.start_step = trainer.step
     header.start_time = int(time.time())
-
-    # GPU support.
-    the_gpu.gpu = FLAGS.gpu
-    if FLAGS.gpu >= 0:
-        model.cuda()
-    else:
-        model.cpu()
-    recursively_set_device(optimizer.state_dict(), FLAGS.gpu)
-
-    # Debug
-    def set_debug(self):
-        self.debug = FLAGS.debug
-    model.apply(set_debug)
 
     # Do an evaluation-only run.
     logger.LogHeader(header)  # Start log_entry logging.
@@ -484,7 +393,7 @@ def run(only_forward=False):
                 eval_set,
                 log_entry,
                 logger,
-                step,
+                trainer,
                 vocabulary,
                 show_sample=True,
                 eval_index=index)
@@ -494,15 +403,10 @@ def run(only_forward=False):
         train_loop(
             FLAGS,
             model,
-            optimizer,
-            sparse_optimizer,
             trainer,
             training_data_iter,
             eval_iterators,
             logger,
-            step,
-            best_dev_error,
-            best_dev_step,
             vocabulary)
 
 

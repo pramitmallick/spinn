@@ -1,5 +1,4 @@
 import numpy as np
-import math
 
 # PyTorch
 import torch
@@ -7,8 +6,8 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 from torch.nn.init import kaiming_normal
+from torch.nn.parameter import Parameter
 
-from spinn.util.misc import recursively_set_device
 from functools import reduce
 
 
@@ -271,61 +270,6 @@ def treelstm(c_left, c_right, gates):
     return (c_t, h_t)
 
 
-class ModelTrainer(object):
-
-    def __init__(self, model, optimizer, sparse_optimizer=None):
-        self.model = model
-        self.optimizer = optimizer
-        self.sparse_optimizer = sparse_optimizer
-
-    def save(self, filename, step, best_dev_error, best_dev_step):
-        if the_gpu() >= 0:
-            recursively_set_device(self.model.state_dict(), gpu=-1)
-            recursively_set_device(self.optimizer.state_dict(), gpu=-1)
-
-        # Always sends Tensors to CPU.
-        save_dict = {
-            'step': step,
-            'best_dev_error': best_dev_error,
-            'best_dev_step': best_dev_step,
-            'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict()
-            }
-        if self.sparse_optimizer is not None:
-            save_dict['sparse_optimizer_state_dict'] = self.sparse_optimizer.state_dict()
-        torch.save(save_dict, filename)
-
-        if the_gpu() >= 0:
-            recursively_set_device(self.model.state_dict(), gpu=the_gpu())
-            recursively_set_device(self.optimizer.state_dict(), gpu=the_gpu())
-
-    def load(self, filename, cpu=False):
-        if cpu:
-            # Load GPU-based checkpoints on CPU
-            checkpoint = torch.load(
-                filename, map_location=lambda storage, loc: storage)
-        else:
-            checkpoint = torch.load(filename)
-        model_state_dict = checkpoint['model_state_dict']
-
-        # HACK: Compatability for saving supervised SPINN and loading RL SPINN.
-        if 'baseline' in self.model.state_dict().keys(
-        ) and 'baseline' not in model_state_dict:
-            model_state_dict['baseline'] = torch.FloatTensor([0.0])
-
-        self.model.load_state_dict(model_state_dict)
-        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        if self.sparse_optimizer is not None:
-            self.sparse_optimizer.load_state_dict(checkpoint['sparse_optimizer_state_dict'])
-
-        if 'best_dev_step' in checkpoint:
-            best_dev_step = checkpoint['best_dev_step']
-        else:
-            best_dev_step = 0
-
-        return checkpoint['step'], checkpoint['best_dev_error'], best_dev_step
-
-
 class Embed(nn.Module):
     def __init__(self, size, vocab_size, vectors, fine_tune=False):
         super(Embed, self).__init__()
@@ -362,7 +306,7 @@ class GRU(nn.Module):
         self.bidirectional = bidirectional
         self.bi = 2 if self.bidirectional else 1
         self.num_layers = num_layers
-        self.rnn = nn.GRU(inp_dim, model_dim / self.bi, num_layers=num_layers,
+        self.rnn = nn.GRU(inp_dim, model_dim // self.bi, num_layers=num_layers,
                           batch_first=True,
                           bidirectional=self.bidirectional)
 
@@ -382,7 +326,7 @@ class GRU(nn.Module):
                     torch.zeros(
                         num_layers * bi,
                         batch_size,
-                        model_dim / bi),
+                        model_dim // bi),
                     volatile=not self.training))
 
         # Expects (input, h_0):
@@ -483,7 +427,7 @@ class EncodeGRU(GRU):
         if mix and bidirectional:
             self.mix = True
             assert model_dim % 4 == 0, "Model dim must be divisible by 4 to use bidirectional GRU encoder."
-            self.half_state_dim = model_dim / 4
+            self.half_state_dim = model_dim // 4
         else:
             self.mix = False
         super(
@@ -517,7 +461,7 @@ class LSTM(nn.Module):
         self.bidirectional = bidirectional
         self.bi = 2 if self.bidirectional else 1
         self.num_layers = num_layers
-        self.rnn = nn.LSTM(inp_dim, model_dim / self.bi, num_layers=num_layers,
+        self.rnn = nn.LSTM(inp_dim, model_dim // self.bi, num_layers=num_layers,
                            batch_first=True,
                            bidirectional=self.bidirectional,
                            dropout=dropout)
@@ -538,7 +482,7 @@ class LSTM(nn.Module):
                     torch.zeros(
                         num_layers * bi,
                         batch_size,
-                        model_dim / bi),
+                        model_dim // bi),
                     volatile=not self.training))
         if c0 is None:
             c0 = to_gpu(
@@ -546,7 +490,7 @@ class LSTM(nn.Module):
                     torch.zeros(
                         num_layers * bi,
                         batch_size,
-                        model_dim / bi),
+                        model_dim // bi),
                     volatile=not self.training))
 
         # Expects (input, h_0, c_0):
@@ -639,6 +583,90 @@ class ReduceTreeLSTM(nn.Module):
         lstm_gates = self.layer(inp)
 
         return unbundle(treelstm(left.c, right.c, lstm_gates))
+
+
+class Lift(nn.Module):
+    def __init__(self, in_features, out_features):
+        super(Lift, self).__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.lift = Linear()(self.in_features, self.out_features * 2)
+
+    def forward(self, input):
+        return F.tanh(self.lift(input))
+
+
+class ReduceTensor(nn.Module):
+    def __init__(self, size):
+        super(ReduceTensor, self).__init__()
+        
+        assert size is not None
+
+        self.dim = size
+        self.weight = Parameter(torch.Tensor(self.dim, self.dim))
+        self.b1 = Parameter(torch.Tensor(self.dim, self.dim))
+        self.b2 = Parameter(torch.Tensor(self.dim, self.dim))
+
+        self.left = Linear()(self.dim * self.dim, 4 * (self.dim * self.dim))
+        self.right = Linear()(self.dim * self.dim, 4 * (self.dim * self.dim))
+
+        self.reset_parameters()
+        
+    def reset_parameters(self):
+        kaiming_normal(self.weight)
+        ZeroInitializer(self.b1)
+        ZeroInitializer(self.b2)
+
+    def forward(self, left_in, right_in):
+        left, right = bundle(left_in), bundle(right_in)
+        lstm_gates = self.left(left.h)
+        lstm_gates += self.right(right.h)
+
+        # Core composition
+        # Retrieve hidden state from left_in and feed it into weight matrix
+        cell_inp = []
+        hidden_dim = self.dim * self.dim
+
+        h = left.h.contiguous().view(-1, self.dim, self.dim)
+        cell_inp = torch.matmul(self.weight, h)
+        cell_inp = F.tanh(torch.add(cell_inp, self.b1))
+
+        # Retrieve hidden state from right_in
+        h = right.h.contiguous().view(-1, self.dim, self.dim)
+        cell_inp = F.tanh(torch.baddbmm(self.b2, cell_inp, h))
+        cell_inp = cell_inp.view(-1, hidden_dim)
+
+        out = unbundle(treelstmtensor(left.c, right.c, lstm_gates, cell_inp, training=self.training))
+
+        return out
+
+
+def treelstmtensor(c_left, c_right, gates, cell_inp, use_dropout=False, training=None):
+    hidden_dim = c_left.size()[1]
+
+    assert gates.size()[1] == hidden_dim * 4, "Need to have 4 gates."
+
+    def slice_gate(gate_data, i):
+        return gate_data[:, i * hidden_dim:(i + 1) * hidden_dim]
+
+    # Compute and slice gate values
+    i_gate, fl_gate, fr_gate, o_gate = [slice_gate(gates, i) for i in range(4)]
+
+    # Apply nonlinearities
+    i_gate = F.sigmoid(i_gate)
+    fl_gate = F.sigmoid(fl_gate)
+    fr_gate = F.sigmoid(fr_gate)
+    o_gate = F.sigmoid(o_gate)
+
+    # Compute new cell and hidden value
+    i_val = i_gate * cell_inp
+    dropout_rate = 0.1
+    if use_dropout:
+        i_val = F.dropout(i_val, dropout_rate, training=training)
+    c_t = fl_gate * c_left + fr_gate * c_right + i_val
+    h_t = o_gate * F.tanh(c_t)
+
+    return (c_t, h_t)
 
 
 class MLP(nn.Module):

@@ -8,7 +8,6 @@ Log format convenience methods for training spinn.
 import numpy as np
 from spinn.util.blocks import flatten
 from spinn.util.misc import time_per_token
-from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
 
 
 class InspectModel(object):
@@ -67,7 +66,7 @@ def train_rl_accumulate(model, A, batch):
     A.add('adv_var_magnitude', model.stats['var_magnitude'])
 
 
-def stats(model, optimizer, A, step, log_entry):
+def stats(model, trainer, A, log_entry):
     im = inspect(model)
 
     if im.has_transition_loss:
@@ -78,10 +77,10 @@ def stats(model, optimizer, A, step, log_entry):
 
     time_metric = time_per_token(A.get('total_tokens'), A.get('total_time'))
 
-    log_entry.step = step
+    log_entry.step = trainer.step
     log_entry.class_accuracy = A.get_avg('class_acc')
     log_entry.cross_entropy_cost = A.get_avg('xent_cost')  # not actual mean
-    log_entry.learning_rate = optimizer.lr
+    log_entry.learning_rate = trainer.learning_rate
     log_entry.time_per_token_seconds = time_metric
 
     total_cost = log_entry.cross_entropy_cost
