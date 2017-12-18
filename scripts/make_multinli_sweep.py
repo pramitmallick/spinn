@@ -9,8 +9,15 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
+<<<<<<< HEAD
 NAME = "big_enc_5"
 SWEEP_RUNS = 12
+=======
+NAME = "1"
+SWEEP_RUNS = 6
+
+NYU_CILVR = True
+>>>>>>> master
 
 LIN = "LIN"
 EXP = "EXP"
@@ -18,17 +25,23 @@ SS_BASE = "SS_BASE"
 BOOL = "BOOL"
 CHOICE = "CHOICE"
 
-FLAGS = gflags.FLAGS
+FLAGS = gflags.FLAGS 
 
-gflags.DEFINE_string("training_data_path", "/home/sb6065/multinli_0.9/multinli_0.9_snli_1.0_train_combined.jsonl", "")
-gflags.DEFINE_string("eval_data_path", "/home/sb6065/multinli_0.9/multinli_0.9_dev_matched.jsonl", "")
-gflags.DEFINE_string("embedding_data_path", "/home/sb6065/glove/glove.840B.300d.txt", "")
-gflags.DEFINE_string("log_path", "/scratch/sb6065/logs/spinn", "")
+if NYU_CILVR:
+    gflags.DEFINE_string("training_data_path", "/home/sbowman/multinli_0.9/multinli_0.9_snli_1.0_train_combined.jsonl", "")
+    gflags.DEFINE_string("eval_data_path", "/home/sbowman/multinli_0.9/multinli_0.9_dev_matched.jsonl", "")
+    gflags.DEFINE_string("embedding_data_path", "/home/sbowman/glove/glove.840B.300d.txt", "")
+    gflags.DEFINE_string("log_path", "/misc/vlgscratch4/BowmanGroup/sbowman/logs", "")
+else:
+    gflags.DEFINE_string("training_data_path", "/home/sb6065/multinli_0.9/multinli_0.9_snli_1.0_train_combined.jsonl", "")
+    gflags.DEFINE_string("eval_data_path", "/home/sb6065/multinli_0.9/multinli_0.9_dev_matched.jsonl", "")
+    gflags.DEFINE_string("embedding_data_path", "/home/sb6065/glove/glove.840B.300d.txt", "")
+    gflags.DEFINE_string("log_path", "/scratch/sb6065/logs/spinn", "")
 
 FLAGS(sys.argv)
 
 # Instructions: Configure the variables in this block, then run
-# the following on a machine with qsub access:
+# the following on a machine with sbatch access:
 # python make_sweep.py > my_sweep.sh
 # bash my_sweep.sh
 
@@ -45,25 +58,44 @@ FIXED_PARAMETERS = {
     "data_type":     "nli",
     "model_type":      "SPINN",
     "word_embedding_dim":   "300",
+<<<<<<< HEAD
     "model_dim":   "1200",
     "seq_length":   "160",
+=======
+    "seq_length":   "100",
+>>>>>>> master
     "eval_seq_length":  "810",
+    "nocomposition_ln": "",
+    "early_stopping_steps_to_wait": "50000", 
+    "fine_tune_loaded_embeddings": "",
+    "optimizer_type": "SGD",
     "eval_interval_steps": "1000",
+<<<<<<< HEAD
     "sample_interval_steps": "1000",
     "encode": "gru",
     "encode_bidirectional": "", 
     "mlp_dim": "512",
     "nocomposition_ln": "",
     "fine_tune_loaded_embeddings": ""
+=======
+    "mlp_dim": "512",
+>>>>>>> master
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
     "semantic_classifier_keep_rate": ("skr", LIN, 0.5, 1.0),
+<<<<<<< HEAD
     "l2_lambda":          ("l2l", EXP, 3e-9, 1e-6),
     "learning_rate": ("lr", EXP, 0.00003, 0.001),
     "spinn_highway": ("sh", BOOL, None, None),
     "model_dim": ("md", CHOICE, ["600", "800", "1200", "1600", "2400"], None),
+=======
+    "l2_lambda":          ("l2", EXP, 1e-9, 1e-6),
+    "learning_rate": ("lr", EXP, 0.1, 0.6),
+    "model_dim": ("s", CHOICE, ['300'], None),
+    "learning_rate_decay_when_no_progress": ("ld", CHOICE, ['0.1', '0.25', '0.5', '1.0'], None),
+>>>>>>> master
 }
 
 
@@ -71,6 +103,7 @@ sweep_name = "sweep_" + NAME + "_" + \
     FIXED_PARAMETERS["data_type"] + "_" + FIXED_PARAMETERS["model_type"]
 
 # - #
+<<<<<<< HEAD
 print "# NAME: " + sweep_name
 print "# NUM RUNS: " + str(SWEEP_RUNS)
 print "# SWEEP PARAMETERS: " + str(SWEEP_PARAMETERS)
@@ -85,6 +118,22 @@ print "EVAL_DATA_PATH=" + FLAGS.eval_data_path
 print "EMBEDDING_DATA_PATH=" + FLAGS.embedding_data_path
 print "LOG_PATH=" + FLAGS.log_path
 print
+=======
+print("# NAME: " + sweep_name)
+print("# NUM RUNS: " + str(SWEEP_RUNS))
+print("# SWEEP PARAMETERS: " + str(SWEEP_PARAMETERS))
+print("# FIXED_PARAMETERS: " + str(FIXED_PARAMETERS))
+print("")
+
+# Print training paths as variables so they can be easily changed without
+# having to change this script.
+print("# Adjust these to your own setup.")
+print("TRAINING_DATA_PATH=" + FLAGS.training_data_path)
+print("EVAL_DATA_PATH=" + FLAGS.eval_data_path)
+print("EMBEDDING_DATA_PATH=" + FLAGS.embedding_data_path)
+print("LOG_PATH=" + FLAGS.log_path)
+print("")
+>>>>>>> master
 
 for run_id in range(SWEEP_RUNS):
     params = {}
@@ -140,7 +189,17 @@ for run_id in range(SWEEP_RUNS):
 
     flags += " --experiment_name " + name
     if NYU_NON_PBS:
+<<<<<<< HEAD
         print "cd spinn/python; python2.7 -m spinn.models.supervised_classifier " + flags
     else:
         print "SPINNMODEL=\"spinn.models.supervised_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh ../scripts/train_spinn.sbatch 1"
     print
+=======
+        print("cd spinn/python; python3 -m spinn.models.supervised_classifier " + flags)
+    elif NYU_CILVR:
+        print("SPINNMODEL=\"spinn.models.supervised_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh ../scripts/train_spinn_cilvr.sbatch 1")
+    else:
+        print("SPINNMODEL=\"spinn.models.supervised_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh ../scripts/train_spinn.sbatch 1")
+    print("")
+
+>>>>>>> master
