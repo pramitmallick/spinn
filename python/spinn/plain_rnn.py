@@ -27,6 +27,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
         use_sentence_pair=use_sentence_pair,
         use_difference_feature=FLAGS.use_difference_feature,
         use_product_feature=FLAGS.use_product_feature,
+        max_pool=FLAGS.max_pool,
         classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
         mlp_dim=FLAGS.mlp_dim,
         num_mlp_layers=FLAGS.num_mlp_layers,
@@ -42,6 +43,7 @@ class RNNModel(nn.Module):
                  vocab_size=None,
                  use_product_feature=None,
                  use_difference_feature=None,
+                 max_pool=None,
                  initial_embeddings=None,
                  fine_tune_loaded_embeddings=None,
                  num_classes=None,
@@ -59,6 +61,7 @@ class RNNModel(nn.Module):
         self.use_sentence_pair = use_sentence_pair
         self.use_difference_feature = use_difference_feature
         self.use_product_feature = use_product_feature
+        self.max_pool = max_pool
 
         self.model_dim = model_dim
 
@@ -120,7 +123,11 @@ class RNNModel(nn.Module):
         # c_0   => (num_layers x num_directions[1,2]) x batch_size x model_dim
         output, (hn, cn) = self.rnn(x, (h0, c0))
 
-        return hn
+        if self.max_pool:
+            max_vecs, _ = torch.max(output, 1)
+            return max_vecs
+        else:
+            return hn
 
     def run_embed(self, x):
         batch_size, seq_length = x.size()

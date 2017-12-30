@@ -41,6 +41,7 @@ def build_model(
         use_sentence_pair=use_sentence_pair,
         use_difference_feature=FLAGS.use_difference_feature,
         use_product_feature=FLAGS.use_product_feature,
+        max_pool=FLAGS.max_pool,
         classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
         mlp_dim=FLAGS.mlp_dim,
         num_mlp_layers=FLAGS.num_mlp_layers,
@@ -51,11 +52,12 @@ def build_model(
 
 
 class LMS(nn.Module):
-    def __init__(self, args, vocab):
+    def __init__(self, args, vocab, max_pool):
         super(LMS, self).__init__()
 
         # Optional debug mode.
         self.debug = False
+        self.max_pool = max_pool
 
         self.wrap_items = args.wrap_items
         self.extract_h = args.extract_h
@@ -343,8 +345,15 @@ class LMS(nn.Module):
             assert all(len(buf) == 1 for buf in self.bufs), \
                 "Stacks should be fully shifted and have 1 zero."
 
-        return [stack[-1]
-                for stack in self.stacks], transition_acc, transition_loss
+        if self.max_pool:
+            output = []
+            for stack in self.stacks:
+                v, _ = torch.max(torch.cat(stack, 0), 0, keepdim=True)
+                output.append(v)
+        else:
+            output = [stack[-1]
+                      for stack in self.stacks]
+        return output, transition_acc, transition_loss
 
 
 class BaseModel(nn.Module):
@@ -364,6 +373,7 @@ class BaseModel(nn.Module):
                  use_sentence_pair=False,
                  use_difference_feature=False,
                  use_product_feature=False,
+                 max_pool=False,
                  mlp_dim=None,
                  num_mlp_layers=None,
                  mlp_ln=None,
@@ -377,6 +387,7 @@ class BaseModel(nn.Module):
         self.use_sentence_pair = use_sentence_pair
         self.use_difference_feature = use_difference_feature
         self.use_product_feature = use_product_feature
+        self.max_pool = max_pool
 
         self.hidden_dim = hidden_dim = model_dim
         self.wrap_items = composition_args.wrap_items
@@ -394,7 +405,7 @@ class BaseModel(nn.Module):
 
         # Build parsing component.
         self.lms = self.build_lms(
-            composition_args, vocab)
+            composition_args, vocab, max_pool)
 
         # Build classiifer.
         features_dim = self.get_features_dim()
@@ -448,8 +459,8 @@ class BaseModel(nn.Module):
             features = h[0]
         return features
 
-    def build_lms(self, args, vocab):
-        return LMS(args, vocab)
+    def build_lms(self, args, vocab, max_pool):
+        return LMS(args, vocab, max_pool)
 
     def run_lms(
             self,

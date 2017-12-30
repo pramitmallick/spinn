@@ -313,8 +313,9 @@ def get_flags():
         "embedding_keep_rate",
         1.0,
         "Used for dropout on transformed embeddings and in the encoder RNN.")
-    gflags.DEFINE_boolean("use_difference_feature", True, "")
-    gflags.DEFINE_boolean("use_product_feature", True, "")
+    gflags.DEFINE_boolean("use_difference_feature", True, "Use the difference of inputs as a feature for the MLP in sentence-pair tasks.")
+    gflags.DEFINE_boolean("use_product_feature", True, "Use the product of inputs as a feature for the MLP in sentence-pair tasks.")
+    gflags.DEFINE_boolean("max_pool", False, "Max pool instead of using the final state in the sentence model (or the mean state for CBOW).")
 
     # SPINN tracking LSTM settings.
     gflags.DEFINE_integer(

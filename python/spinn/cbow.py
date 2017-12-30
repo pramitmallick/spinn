@@ -26,6 +26,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
         use_sentence_pair=use_sentence_pair,
         use_difference_feature=FLAGS.use_difference_feature,
         use_product_feature=FLAGS.use_product_feature,
+        max_pool=FLAGS.max_pool,
         classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
         mlp_dim=FLAGS.mlp_dim,
         num_mlp_layers=FLAGS.num_mlp_layers,
@@ -44,6 +45,7 @@ class BaseModel(nn.Module):
                  fine_tune_loaded_embeddings=None,
                  use_difference_feature=None,
                  use_product_feature=None,
+                 max_pool=None,
                  num_classes=None,
                  embedding_keep_rate=None,
                  classifier_keep_rate=None,
@@ -59,6 +61,7 @@ class BaseModel(nn.Module):
         self.use_sentence_pair = use_sentence_pair
         self.use_difference_feature = use_difference_feature
         self.use_product_feature = use_product_feature
+        self.max_pool = max_pool
 
         self.model_dim = model_dim
 
@@ -103,7 +106,11 @@ class BaseModel(nn.Module):
 
         x = self.unwrap(sentences, transitions)
         emb = self.run_embed(x)
-        hh = torch.squeeze(torch.sum(emb, 1))
+        if self.max_pool:
+            agg, _ = torch.max(emb, 1)
+        else: 
+            agg = torch.sum(emb, 1)
+        hh = torch.squeeze(agg)
         h = self.wrap(hh)
         output = self.mlp(self.build_features(h))
 

@@ -40,6 +40,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
         predict_use_cell=FLAGS.predict_use_cell,
         use_difference_feature=FLAGS.use_difference_feature,
         use_product_feature=FLAGS.use_product_feature,
+        max_pool=FLAGS.max_pool,
         classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
         mlp_dim=FLAGS.mlp_dim,
         num_mlp_layers=FLAGS.num_mlp_layers,
@@ -130,11 +131,12 @@ class Tracker(nn.Module):
 
 class SPINN(nn.Module):
 
-    def __init__(self, args, vocab, predict_use_cell):
+    def __init__(self, args, vocab, predict_use_cell, max_pool):
         super(SPINN, self).__init__()
 
         # Optional debug mode.
         self.debug = False
+        self.max_pool = max_pool
 
         self.transition_weight = args.transition_weight
 
@@ -544,8 +546,15 @@ class SPINN(nn.Module):
             assert all(len(buf) == 1 for buf in self.bufs), \
                 "Stacks should be fully shifted and have 1 zero."
 
-        return [stack[-1]
-                for stack in self.stacks], transition_acc, transition_loss
+        if self.max_pool:
+            output = []
+            for stack in self.stacks:
+                v, _ = torch.max(torch.cat(stack, 0), 0, keepdim=True)
+                output.append(v)
+        else:
+            output = [stack[-1]
+                      for stack in self.stacks]
+        return output, transition_acc, transition_loss
 
 
 class BaseModel(nn.Module):
@@ -571,6 +580,7 @@ class BaseModel(nn.Module):
                  use_sentence_pair=False,
                  use_difference_feature=False,
                  use_product_feature=False,
+                 max_pool=False,
                  mlp_dim=None,
                  num_mlp_layers=None,
                  mlp_ln=None,
@@ -587,6 +597,7 @@ class BaseModel(nn.Module):
         self.use_sentence_pair = use_sentence_pair
         self.use_difference_feature = use_difference_feature
         self.use_product_feature = use_product_feature
+        self.max_pool = max_pool
 
         self.hidden_dim = composition_args.size
         self.wrap_items = composition_args.wrap_items
@@ -604,7 +615,7 @@ class BaseModel(nn.Module):
 
         # Build parsing component.
         self.spinn = self.build_spinn(
-            composition_args, vocab, predict_use_cell)
+            composition_args, vocab, predict_use_cell, max_pool)
 
         # Build classiifer.
         features_dim = self.get_features_dim()
@@ -650,8 +661,8 @@ class BaseModel(nn.Module):
             features = h[0]
         return features
 
-    def build_spinn(self, args, vocab, predict_use_cell):
-        return SPINN(args, vocab, predict_use_cell)
+    def build_spinn(self, args, vocab, predict_use_cell, max_pool):
+        return SPINN(args, vocab, predict_use_cell, max_pool)
 
     def run_spinn(
             self,

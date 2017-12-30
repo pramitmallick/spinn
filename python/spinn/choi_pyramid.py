@@ -28,6 +28,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
         embedding_keep_rate=FLAGS.embedding_keep_rate,
         use_sentence_pair=use_sentence_pair,
         use_difference_feature=FLAGS.use_difference_feature,
+        max_pool=FLAGS.max_pool,
         use_product_feature=FLAGS.use_product_feature,
         classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
         mlp_dim=FLAGS.mlp_dim,
@@ -46,6 +47,7 @@ class ChoiPyramid(nn.Module):
                  vocab_size=None,
                  use_product_feature=None,
                  use_difference_feature=None,
+                 max_pool=None,
                  initial_embeddings=None,
                  fine_tune_loaded_embeddings=None,
                  num_classes=None,
@@ -65,6 +67,8 @@ class ChoiPyramid(nn.Module):
         self.use_sentence_pair = use_sentence_pair
         self.use_difference_feature = use_difference_feature
         self.use_product_feature = use_product_feature
+        self.max_pool = max_pool
+
         self.model_dim = model_dim
         self.trainable_temperature = trainable_temperature
 
@@ -86,7 +90,8 @@ class ChoiPyramid(nn.Module):
             model_dim // 2,
             False,
             composition_ln=composition_ln,
-            trainable_temperature=trainable_temperature)
+            trainable_temperature=trainable_temperature,
+            max_pool=max_pool)
 
         mlp_input_dim = self.get_features_dim()
 
@@ -261,13 +266,14 @@ class ChoiPyramid(nn.Module):
 class BinaryTreeLSTM(nn.Module):
 
     def __init__(self, word_dim, hidden_dim, intra_attention,
-                 composition_ln=False, trainable_temperature=False):
+                 composition_ln=False, trainable_temperature=False, max_pool=False):
         super(BinaryTreeLSTM, self).__init__()
         self.word_dim = word_dim
         self.hidden_dim = hidden_dim
         self.intra_attention = intra_attention
         self.treelstm_layer = BinaryTreeLSTMLayer(
             hidden_dim, composition_ln=composition_ln)
+        self.max_pool = max_pool
 
         # TODO: Add something to blocks to make this use case more elegant.
         self.comp_query = Linear()(
@@ -348,8 +354,8 @@ class BinaryTreeLSTM(nn.Module):
         nodes = []
         # For one or two-word trees where we never compute a temperature
         temperature_to_display = -1.0
-        if self.intra_attention:
-            nodes.append(state[0])
+        if self.intra_attention or self.max_pool:
+            nodes.append(state[0])  # TODO: We migt be able to compute max slightly more efficiently if we keep a running max.
         for i in range(max_depth - 1):
             h, c = state
             l = (h[:, :-1, :], c[:, :-1, :])
@@ -388,6 +394,9 @@ class BinaryTreeLSTM(nn.Module):
             att_weights_expand = att_weights.unsqueeze(2)
             # h: (batch_size, 1, 2 * hidden_dim)
             h = (att_weights_expand * nodes).sum(1)
+        elif self.max_pool:
+            h, _ = torch.cat(nodes, dim=1).max(1, keepdim=True)
+
         assert h.size(1) == 1 and c.size(1) == 1
         return h.squeeze(1), c.squeeze(1), select_masks, temperature_to_display
 
