@@ -82,8 +82,7 @@ def stats(model, optimizer, A, step, log_entry):
     log_entry.class_accuracy = A.get_avg('class_acc')
     log_entry.cross_entropy_cost = A.get_avg('xent_cost')  # not actual mean
     log_entry.l2_cost = A.get_avg('l2_cost')  # not actual mean
-    if not isinstance(optimizer, YFOptimizer):
-        log_entry.learning_rate = optimizer.lr
+    log_entry.learning_rate = optimizer.lr
     log_entry.time_per_token_seconds = time_metric
 
     total_cost = log_entry.l2_cost + log_entry.cross_entropy_cost

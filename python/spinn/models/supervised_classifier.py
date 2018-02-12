@@ -288,7 +288,7 @@ def train_loop(
         total_loss += xent_loss
         if l2_loss is not None:
             total_loss += l2_loss
-        if transition_loss is not None and model.optimize_transition_loss:
+        if transition_loss is not None:
             total_loss += transition_loss
         aux_loss = auxiliary_loss(model)
         total_loss += aux_loss

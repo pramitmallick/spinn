@@ -561,8 +561,6 @@ class SPINN(nn.Module):
 
 class BaseModel(nn.Module):
 
-    optimize_transition_loss = True
-
     def __init__(self, model_dim=None,
                  word_embedding_dim=None,
                  vocab_size=None,
@@ -696,6 +694,7 @@ class BaseModel(nn.Module):
         embeds = self.embed(example.tokens)
         embeds = self.reshape_input(embeds, b, l)
         embeds = self.encode(embeds)
+
         embeds = self.reshape_context(embeds, b, l)
         self.forward_hook(embeds, b, l)
         embeds = F.dropout(

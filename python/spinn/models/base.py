@@ -135,11 +135,11 @@ def load_data_and_embeddings(
         if FLAGS.data_type == "nli":
             # Load the data.
             raw_training_data = data_manager.load_data(
-                training_data_path, FLAGS.lowercase, choose_train)
+                training_data_path, FLAGS.lowercase, choose_train, mode=FLAGS.transition_mode)
         else:
             # Load the data.
             raw_training_data = data_manager.load_data(
-                training_data_path, FLAGS.lowercase)
+                training_data_path, FLAGS.lowercase, mode=FLAGS.transition_mode)
     else:
         raw_training_data = None
 
@@ -148,13 +148,13 @@ def load_data_and_embeddings(
         raw_eval_sets = []
         for path in eval_data_path.split(':'):
             raw_eval_data = data_manager.load_data(
-                path, FLAGS.lowercase, choose_eval)
+                path, FLAGS.lowercase, choose_eval, mode=FLAGS.transition_mode)
             raw_eval_sets.append((path, raw_eval_data))
     else:
         # Load the eval data.
         raw_eval_sets = []
         for path in eval_data_path.split(':'):
-            raw_eval_data = data_manager.load_data(path, FLAGS.lowercase)
+            raw_eval_data = data_manager.load_data(path, FLAGS.lowercase, mode=FLAGS.transition_mode)
             raw_eval_sets.append((path, raw_eval_data))
 
     # Prepare the vocabulary.
@@ -380,6 +380,19 @@ def get_flags():
         "reduce", "treelstm", [
             "treelstm", "treegru", "tanh"], "Specify composition function.")
 
+    # Fixed tree settings.
+    gflags.DEFINE_enum(
+        "transition_mode", "default", [
+            "default", "full", "half_full", "half_full_right", "balanced"],
+            "Specify whether to use given" +\
+            " binary parse trees or to use a fixed strategy.")
+    gflags.DEFINE_boolean(
+        "full_trees",
+        False,
+        "If set to True, then all parse trees will be full binary" +\
+        " trees and sentences padded to a factor of 2. (deprecated;" +\
+        " use transition_mode instead)")
+
     # Pyramid model settings
     gflags.DEFINE_boolean(
         "pyramid_trainable_temperature",
@@ -462,6 +475,12 @@ def get_flags():
         "rl_transition_acc_as_reward",
         False,
         "Use the transition accuracy as the reward. For debugging only.")
+
+    # RNN Settings
+    gflags.DEFINE_boolean(
+        "model_bidirectional",
+        False,
+        "Use bidirectional recurrent network.")
 
     # MLP settings.
     gflags.DEFINE_integer(
@@ -623,6 +642,11 @@ def flag_defaults(FLAGS, load_log_flags=False):
 
     if not torch.cuda.is_available():
         FLAGS.gpu = -1
+
+    if FLAGS.full_trees:
+        print('Using deprecated flag full_trees. Use transition_mode instead.')
+        assert FLAGS.transition_mode == 'default', 'If full_trees is set, then do not use transition_mode.'
+        FLAGS.transition_mode = 'full'
 
 
 def init_model(
