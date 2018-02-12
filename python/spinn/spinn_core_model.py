@@ -47,7 +47,6 @@ def build_model(data_manager, initial_embeddings, vocab_size,
         composition_args=composition_args,
         detach=FLAGS.transition_detach,
         evolution=FLAGS.evolution,
-        mask_padding=FLAGS.mask_padding,
     )
 
 
@@ -588,15 +587,12 @@ class BaseModel(nn.Module):
                  composition_args=None,
                  detach=None,
                  evolution=None,
-                 mask_padding=None,
                  **kwargs
                  ):
         super(BaseModel, self).__init__()
 
         assert not (
             use_tracking_in_composition and not lateral_tracking), "Lateral tracking must be on to use tracking in composition."
-
-        self.mask_padding = mask_padding
 
         self.use_sentence_pair = use_sentence_pair
         self.use_difference_feature = use_difference_feature
@@ -695,10 +691,6 @@ class BaseModel(nn.Module):
 
         b, l = example.tokens.size()[:2]
 
-        # Mask Padding Tokens Part 1
-        if self.mask_padding:
-            mask = (example.tokens != 0)
-
         embeds = self.embed(example.tokens)
         embeds = self.reshape_input(embeds, b, l)
         embeds = self.encode(embeds)
@@ -709,16 +701,6 @@ class BaseModel(nn.Module):
             embeds,
             self.embedding_dropout_rate,
             training=self.training)
-
-        # Mask Padding Tokens Part 2
-        if self.mask_padding:
-            embeds_shape = embeds.size()
-            embeds = embeds.view(b, l, -1)
-            embedsd = embeds.detach().clone()
-            mask = mask.view(b, l , 1).expand_as(embeds)
-            embedsd[mask] = embeds[mask]
-            embeds = embedsd
-            embeds = embeds.view(*embeds_shape)
 
         # Make Buffers
         # _embeds = torch.chunk(to_cpu(embeds), b, 0)

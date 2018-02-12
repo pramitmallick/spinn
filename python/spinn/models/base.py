@@ -392,10 +392,6 @@ def get_flags():
         "If set to True, then all parse trees will be full binary" +\
         " trees and sentences padded to a factor of 2. (deprecated;" +\
         " use transition_mode instead)")
-    gflags.DEFINE_boolean(
-        "mask_padding",
-        False,
-        "If set to True, will detach leaf state after encoding layer for $pad.")
 
     # Pyramid model settings
     gflags.DEFINE_boolean(
