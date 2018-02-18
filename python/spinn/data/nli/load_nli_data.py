@@ -32,8 +32,66 @@ def convert_binary_bracketing(parse, lowercase=False):
                 transitions.append(0)
     return tokens, transitions
 
+def convert_binary_bracketing_lb(parse, lowercase=False):
+    tokens, transitions = convert_binary_bracketing(parse, lowercase)
+    if len(tokens)>1:
+        transitions=lb_build(len(tokens))
+    return tokens, transitions
 
-def load_data(path, lowercase=False, choose=lambda x: True, eval_mode=False):
+
+def convert_binary_bracketing_rb(parse, lowercase=False):
+    tokens, transitions = convert_binary_bracketing(parse, lowercase)
+    if len(tokens)>1:
+        transitions=rb_build(len(tokens))
+    return tokens, transitions
+
+def convert_binary_bracketing_lb(parse, lowercase=False):
+    tokens, transitions = convert_binary_bracketing(parse, lowercase)
+    if len(tokens)>1:
+        transitions=lb_build(len(tokens))
+    return tokens, transitions
+def convert_binary_bracketing_balanced(parse, lowercase=False):
+    tokens, transitions = convert_binary_bracketing(parse, lowercase)
+    if len(tokens)>1:
+        transitions=balanced_transitions(len(tokens))
+    return tokens, transitions
+
+
+def lb_build(N):
+    if N==2:
+        return [0,0,1]
+    else:
+        return lb_build(N-1)+[0,1]
+
+def rb_build(N):
+    return [0]*N+[1]*(N-1)
+
+
+def balanced_transitions(N):
+    """
+    Recursively creates a balanced binary tree with N
+    leaves using shift reduce transitions.
+    """
+    if N == 3:
+        return [0, 0, 1, 0, 1]
+    elif N == 2:
+        return [0, 0, 1]
+    elif N == 1:
+        return [0]
+    else:
+        right_N = N // 2
+        left_N = N - right_N
+        return balanced_transitions(left_N) + balanced_transitions(right_N) + [1]
+
+def load_data(path, lowercase=False, choose=lambda x: True, eval_mode=False,mode="default"):
+    if mode=="default":
+        converter=convert_binary_bracketing
+    elif mode=="full_left":
+        converter=convert_binary_bracketing_lb
+    elif mode=="full_right":
+        converter=convert_binary_bracketing_rb
+    elif mode=="balanced":
+        converter=convert_binary_bracketing_balanced
     print("Loading", path)
     examples = []
     failed_parse = 0
@@ -52,9 +110,9 @@ def load_data(path, lowercase=False, choose=lambda x: True, eval_mode=False):
             example["hypothesis"] = loaded_example["sentence2"]
             example["example_id"] = loaded_example.get('pairID', 'NoID')
             if loaded_example["sentence1_binary_parse"] and loaded_example["sentence2_binary_parse"]:
-                (example["premise_tokens"], example["premise_transitions"]) = convert_binary_bracketing(
+                (example["premise_tokens"], example["premise_transitions"]) = converter(
                     loaded_example["sentence1_binary_parse"], lowercase=lowercase)
-                (example["hypothesis_tokens"], example["hypothesis_transitions"]) = convert_binary_bracketing(
+                (example["hypothesis_tokens"], example["hypothesis_transitions"]) = converter(
                     loaded_example["sentence2_binary_parse"], lowercase=lowercase)
                 examples.append(example)
             else:

@@ -105,7 +105,8 @@ def load_data_and_embeddings(
         data_manager,
         logger,
         training_data_path,
-        eval_data_path):
+        eval_data_path,
+        transition_mode="default"):
 
     def choose_train(x): return True
     if FLAGS.train_genre is not None:
@@ -117,14 +118,14 @@ def load_data_and_embeddings(
 
     if not FLAGS.expanded_eval_only_mode:
         raw_training_data = data_manager.load_data(
-            training_data_path, FLAGS.lowercase, eval_mode=False)
+            training_data_path, FLAGS.lowercase, eval_mode=False, mode=FLAGS.transition_mode)
     else:
         raw_training_data = None
 
     raw_eval_sets = []
     for path in eval_data_path.split(':'):
         raw_eval_data = data_manager.load_data(
-            path, FLAGS.lowercase, choose_eval, eval_mode=True)
+            path, FLAGS.lowercase, choose_eval, eval_mode=True, mode=FLAGS.transition_mode)
         raw_eval_sets.append((path, raw_eval_data))
 
     # Prepare the vocabulary.
@@ -205,6 +206,7 @@ def get_flags():
         True,
         "Turn this off when running experiments on HPC.")
     gflags.DEFINE_string("git_branch_name", "", "Set automatically.")
+    gflags.DEFINE_string("transition_mode", "default", "Can force a particular transition sequence.")
     gflags.DEFINE_string("slurm_job_id", "", "Set automatically.")
     gflags.DEFINE_integer(
         "deque_length",
