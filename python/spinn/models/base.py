@@ -207,6 +207,7 @@ def get_flags():
         "Turn this off when running experiments on HPC.")
     gflags.DEFINE_string("git_branch_name", "", "Set automatically.")
     gflags.DEFINE_string("transition_mode", "default", "Can force a particular transition sequence.")
+    gflags.DEFINE_boolean("residual", False, "Whether to use a residual net to deepend the tree comp fn")
     gflags.DEFINE_string("slurm_job_id", "", "Set automatically.")
     gflags.DEFINE_integer(
         "deque_length",
@@ -703,7 +704,8 @@ def init_model(
             FLAGS.model_dim // 2,
             tracker_size=FLAGS.tracking_lstm_hidden_dim,
             use_tracking_in_composition=FLAGS.use_tracking_in_composition,
-            composition_ln=FLAGS.composition_ln)
+            composition_ln=FLAGS.composition_ln,
+            residual=FLAGS.residual)
     elif FLAGS.reduce == "tanh":
         class ReduceTanh(nn.Module):
             def forward(self, lefts, rights, tracking=None):
