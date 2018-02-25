@@ -105,7 +105,8 @@ def load_data_and_embeddings(
         data_manager,
         logger,
         training_data_path,
-        eval_data_path):
+        eval_data_path,
+        level="all"):
 
     def choose_train(x): return True
     if FLAGS.train_genre is not None:
@@ -117,7 +118,7 @@ def load_data_and_embeddings(
 
     if not FLAGS.expanded_eval_only_mode:
         raw_training_data = data_manager.load_data(
-            training_data_path, FLAGS.lowercase, eval_mode=False)
+            training_data_path, FLAGS.lowercase, eval_mode=False, level=level)
     else:
         raw_training_data = None
 
@@ -204,7 +205,15 @@ def get_flags():
         "show_progress_bar",
         True,
         "Turn this off when running experiments on HPC.")
-    gflags.DEFINE_string("git_branch_name", "", "Set automatically.")
+    gflags.DEFINE_bool(
+        "curriculum",
+        False,
+        "Set for C-learning.")
+    gflags.DEFINE_string("git_branch_name", "", "Set automatically.")     
+    gflags.DEFINE_float(
+        "curriculum_accuracy",
+        0.5,
+        "Curriculum accuracy above which we consider more data.")
     gflags.DEFINE_string("slurm_job_id", "", "Set automatically.")
     gflags.DEFINE_integer(
         "deque_length",

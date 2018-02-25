@@ -162,7 +162,7 @@ def train_loop(
 	vocabulary):
     # Accumulate useful statistics.
     A = Accumulator(maxlen=FLAGS.deque_length)
-
+    current_level=1
     # Train.
     logger.Log("Training.")
 
@@ -329,6 +329,17 @@ def train_loop(
                     trainer.new_dev_accuracy(acc)
 
             progress_bar.reset()
+            if FLAGS.curriculum:
+                if acc> FLAGS.curriculum_accuracy and current_level==1:
+                    current_level=2
+                    _, _, training_data_iter, _, training_data_length = \
+                        load_data_and_embeddings(FLAGS, data_manager, logger,
+                                 FLAGS.training_data_path, FLAGS.eval_data_path, level=current_level)
+                    logger.Log('Curriculum: Update level.')
+                else:
+                    logger.log('Curriculum: Same level.')
+
+
 
         if trainer.step > FLAGS.ckpt_step and trainer.step % FLAGS.ckpt_interval_steps == 0:
             should_log = True
@@ -354,10 +365,14 @@ def run(only_forward=False):
                json.dumps(FLAGS.FlagValuesDict(), indent=4, sort_keys=True))
 
     # Get Data and Embeddings
+    if FLAGS.curriculum:
+        level=1
+    else:
+        level="all"
     vocabulary, initial_embeddings, training_data_iter, eval_iterators, training_data_length = \
         load_data_and_embeddings(FLAGS, data_manager, logger,
-                                 FLAGS.training_data_path, FLAGS.eval_data_path)
-
+                                 FLAGS.training_data_path, FLAGS.eval_data_path, level=level)
+    print("Current data length: "+str(training_data_length))
     # Build model.
     vocab_size = len(vocabulary)
     num_classes = len(set(data_manager.LABEL_MAP.values()))
