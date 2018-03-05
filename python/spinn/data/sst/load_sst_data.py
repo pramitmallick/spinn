@@ -27,8 +27,9 @@ def load_data(
         seq_length=None,
         batch_size=None,
         eval_mode=False,
-        logger=None):
-    dataset = convert_unary_binary_bracketed_data(path, top_node_only=eval_mode)
+        logger=None,
+        mode="default"):
+    dataset = convert_unary_binary_bracketed_data(path, top_node_only=eval_mode, transition_mode=mode)
     return dataset
 
 
