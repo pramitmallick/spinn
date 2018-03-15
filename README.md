@@ -1,6 +1,6 @@
 # Code for Williams, Drozdov, and Bowman '17
 
-This release contains the source code for the paper: "Learning to parse from a semantic objective: It works. Is it syntax?"
+This release contains the source code for the paper: "[Do latent tree learning models identify meaningful structure in sentences?][11]"
 
 It is built on a fairly large and unwieldy [codebase][9] that was prepared for the paper [A Fast Unified Model for Sentence Parsing and Understanding][1]. The master branch may still be under active development for other projects.
 
@@ -78,3 +78,4 @@ limitations under the License.
 [8]: http://nlp.stanford.edu/blog/hybrid-tree-sequence-neural-networks-with-spinn/
 [9]: https://github.com/stanfordnlp/spinn
 [10]: https://github.com/nyu-mll/spinn/blob/master/scripts/make_listops_catalan_sweep.py
+[11]: https://arxiv.org/pdf/1709.01121.pdf
