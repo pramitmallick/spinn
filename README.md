@@ -44,13 +44,15 @@ The experiment names don't neatly correspond to the terms used in the paper, but
 
 ### Running the trained models from the paper or viewing their output
 
-First, download the log and checkpoint package from [here](http://nyu.edu/projects/bowman/williams_syntax_checkpoints.zip) (warning: 3.3GB).
+First, download the log and checkpoint package from [here](http://nyu.edu/projects/bowman/williams_syntax_checkpoints.zip) (warning: 4GB).
 
 To use the trained models, run any of the commands in [`scripts/train_all_models_x5.sh`](https://github.com/nyu-mll/spinn/blob/is-it-syntax-release/scripts/train_all_models_x5.sh) with the following flags appended to the end of the command. This will evaluate the model on the specified datasets, write the resulting trees to one `.report` file per dataset, and exit.
 
     ... --eval_data_path ../multinli_0.9/multinli_0.9_dev_matched.jsonl:../ptb.jsonl --expanded_eval_only_mode --write_eval_report
 
 If you simply need the trees produced by the trained models for MultiNLI (dev_matched), those can be found in the checkpoint package as `.report` files.
+
+Run the notebook [`notebooks/generate_random_binary_parses.ipynb`](https://github.com/nyu-mll/spinn/blob/is-it-syntax-release/scripts/generate_random_binary_parses.ipynb) to generate the random parse trees used by some of the baseline experiments.
 
 ### License
 
