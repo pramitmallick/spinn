@@ -42,8 +42,7 @@ def spans(transitions, tokens=None):
 
     return nodes
 
-
-def load_data(path, lowercase=None, choose=lambda x: True, eval_mode=False):
+def load_data(path, lowercase=None, choose=lambda x: True, eval_mode=False, level="all", level_percentile=60):
     examples = []
     with open(path) as f:
         for example_id, line in enumerate(f):
@@ -58,9 +57,16 @@ def load_data(path, lowercase=None, choose=lambda x: True, eval_mode=False):
             example = {}
             example["label"] = label
             example["sentence"] = seq
+            example["length"] = len(seq.split(" "))
             example["tokens"] = tokens
             example["transitions"] = transitions
             example["example_id"] = str(example_id)
 
             examples.append(example)
-    return examples
+    if level=="all" or level==2:        
+        return examples
+    ne=np.array([e["length"] for e in examples])
+    val=np.percentile(ne, level_percentile)
+    examples=np.array(examples)
+    examples=examples[(ne<val)]
+    return list(examples)
