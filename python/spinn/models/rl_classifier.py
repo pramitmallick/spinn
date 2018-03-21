@@ -332,12 +332,13 @@ def train_loop(
             if FLAGS.curriculum:
                 if acc> FLAGS.curriculum_accuracy and current_level==1:
                     current_level=2
-                    _, _, training_data_iter, _, training_data_length = \
-                        load_data_and_embeddings(FLAGS, data_manager, logger,
-                                 FLAGS.training_data_path, FLAGS.eval_data_path, level=current_level)
-                    logger.Log('Curriculum: Update level.')
+                    # _, _, training_data_iter, _, training_data_length = \
+                    #     load_data_and_embeddings(FLAGS, data_manager, logger,
+                    #              FLAGS.training_data_path, FLAGS.eval_data_path, level=current_level)
+                    run(level=current_level)
+                    print('Curriculum: Update level.')
                 else:
-                    logger.log('Curriculum: Same level.')
+                    print('Curriculum: Same level.')
 
 
 
@@ -352,7 +353,7 @@ def train_loop(
                           total=FLAGS.statistics_interval_steps)
 
 
-def run(only_forward=False):
+def run(only_forward=False, level=1):
     logger = afs_safe_logger.ProtoLogger(log_path(FLAGS),
                                          print_formatter=create_log_formatter(
                                              True, True),
@@ -366,7 +367,7 @@ def run(only_forward=False):
 
     # Get Data and Embeddings
     if FLAGS.curriculum:
-        level=1
+        level=level
     else:
         level="all"
     vocabulary, initial_embeddings, training_data_iter, eval_iterators, training_data_length = \

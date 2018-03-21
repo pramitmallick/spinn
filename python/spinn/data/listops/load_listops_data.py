@@ -1,6 +1,6 @@
 from collections import namedtuple
 from spinn import util
-
+import numpy as np
 from spinn.data.listops.base import FIXED_VOCABULARY
 
 SENTENCE_PAIR_DATA = False
