@@ -159,7 +159,7 @@ def train_loop(
         training_data_iter,
         eval_iterators,
         logger,
-	vocabulary
+	vocabulary,
     level=1):
     # Accumulate useful statistics.
     A = Accumulator(maxlen=FLAGS.deque_length)
