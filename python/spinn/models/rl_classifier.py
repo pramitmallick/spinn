@@ -419,7 +419,7 @@ def run(only_forward=False, level=1):
             training_data_iter,
             eval_iterators,
             logger,
-            vocabulary
+            vocabulary,
             level=level)
 
 
