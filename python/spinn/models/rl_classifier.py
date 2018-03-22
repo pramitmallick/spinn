@@ -159,10 +159,11 @@ def train_loop(
         training_data_iter,
         eval_iterators,
         logger,
-	vocabulary):
+	vocabulary
+    level=1):
     # Accumulate useful statistics.
     A = Accumulator(maxlen=FLAGS.deque_length)
-    current_level=1
+    current_level=level
     # Train.
     logger.Log("Training.")
 
@@ -418,7 +419,8 @@ def run(only_forward=False, level=1):
             training_data_iter,
             eval_iterators,
             logger,
-            vocabulary)
+            vocabulary
+            level=level)
 
 
 if __name__ == '__main__':
