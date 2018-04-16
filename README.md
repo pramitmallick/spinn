@@ -31,6 +31,11 @@ Here's a sample command that runs a fast, low-dimensional CPU training run, trai
 
 For full runs, you'll also need a copy of the 840B word 300D [GloVe word vectors](http://nlp.stanford.edu/projects/glove/).
 
+## ListOps Dataset
+The ListOps dataset is released as text files and can be downloaded [here](https://github.com/nyu-mll/spinn/tree/listops-release/python/spinn/data/listops). 
+
+The data generation script is [make_data.py](https://github.com/nyu-mll/spinn/blob/listops-release/python/spinn/data/listops/make_data.py). Variables such as maximum tree-depth (MAX_DEPTH) can be changed to generate variations on ListOps, additional mathematical operations can also be added.
+
 ## Semi-Supervised Parsing
 
 You can train SPINN using only sentence-level labels. In this case, the integrated parser will randomly sample labels during training time, and will be optimized with the REINFORCE algorithm. The command to run this model looks slightly different:
