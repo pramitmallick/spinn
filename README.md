@@ -1,8 +1,17 @@
-# Stack-augmented Parser-Interpreter Neural Network
+# ListOps
+This is the source code for the paper, "ListOps: A Diagnostic Dataset for Latent Tree Learning" by Nangia and Bowman, 2018.
 
-This repository was used for the paper [A Fast Unified Model for Sentence Parsing and Understanding][1] and [original codebase][9], and is under active development for further projects. For a more informal introduction to the ideas behind the model, see this [Stanford NLP blog post][8].
+It is built on a fairly large and unwieldy [codebase](https://github.com/stanfordnlp/spinn) that was prepared for the paper [A Fast Unified Model for Sentence Parsing and Understanding](https://arxiv.org/abs/1603.06021). The master branch is still under active development for other projects and may be buggy.
+
+### ListOps Data
+The ListOps dataset is released as text files and can be downloaded [here](https://github.com/nyu-mll/spinn/tree/listops-release/python/spinn/data/listops). 
+
+
+### Data Generation
+The data generation script is [make_data.py](https://github.com/nyu-mll/spinn/blob/listops-release/python/spinn/data/listops/make_data.py). Variables such as maximum tree-depth (MAX_DEPTH) can be changed to generate variations on ListOps, additional mathematical operations can also be added.
 
 ### Installation
+If you want to run experiments with the models used in the paper, follow these steps for installation.
 
 Requirements:
 
@@ -18,53 +27,33 @@ Install the other Python dependencies using the command below.
 
 ### Running the code
 
-The main executable for the SNLI experiments in the paper is [supervised_classifier.py](https://github.com/mrdrozdov/spinn/blob/master/python/spinn/models/supervised_classifier.py), whose flags specify the hyperparameters of the model. You can specify gpu usage by setting `--gpu` flag greater than or equal to 0. Uses the CPU by default.
+The main executables for the ListOps experiments in the paper are [supervised_classifier.py](https://github.com/mrdrozdov/spinn/blob/master/python/spinn/models/supervised_classifier.py) and [rl_classifier.py](https://github.com/mrdrozdov/spinn/blob/master/python/spinn/models/rl_classifier.py). The flags specfiy the model type and the hyperparameters. You can specify gpu usage by setting `--gpu` flag greater than or equal to 0. Uses the CPU by default.
 
-Here's a sample command that runs a fast, low-dimensional CPU training run, training and testing only on the dev set. It assumes that you have a copy of [SNLI](http://nlp.stanford.edu/projects/snli/) available locally.
+Here is a sample command that runs a CPU training run for an RNN, training and testing on ListOps.
 
-        PYTHONPATH=spinn/python \
-            python3 -m spinn.models.supervised_classifier --data_type nli \
-        --training_data_path ~/data/snli_1.0/snli_1.0_dev.jsonl \
-        --eval_data_path ~/data/snli_1.0/snli_1.0_dev.jsonl \
-        --embedding_data_path python/spinn/tests/test_embedding_matrix.5d.txt \
-        --word_embedding_dim 5 --model_dim 10 --model_type CBOW
-
-For full runs, you'll also need a copy of the 840B word 300D [GloVe word vectors](http://nlp.stanford.edu/projects/glove/).
-
-## ListOps Dataset
-The ListOps dataset is released as text files and can be downloaded [here](https://github.com/nyu-mll/spinn/tree/listops-release/python/spinn/data/listops). 
-
-The data generation script is [make_data.py](https://github.com/nyu-mll/spinn/blob/listops-release/python/spinn/data/listops/make_data.py). Variables such as maximum tree-depth (MAX_DEPTH) can be changed to generate variations on ListOps, additional mathematical operations can also be added.
-
-## Semi-Supervised Parsing
-
-You can train SPINN using only sentence-level labels. In this case, the integrated parser will randomly sample labels during training time, and will be optimized with the REINFORCE algorithm. The command to run this model looks slightly different:
-
-    python3 -m spinn.models.rl_classifier --data_type listops \
-        --training_data_path spinn/python/spinn/data/listops/train_d20a.tsv \
-        --eval_data_path spinn/python/spinn/data/listops/test_d20a.tsv  \
-        --word_embedding_dim 32 --model_dim 32 --mlp_dim 16 --model_type RLSPINN \
-        --rl_baseline value --rl_reward standard --rl_weight 42.0
-
-Note: This model does not yet work well on natural language data, although it does on the included synthetic dataset called `listops`. Please look at the [sweep file][10] for an idea of which hyperparameters to use.
+    PYTHONPATH=spinn/python \
+        python3 -m spinn.models.supervised_classifier --data_type listops \
+        --model_type RNN --training_data_path spinn/data/listops/train_d20s.tsv \
+        --eval_data_path spinn/data/listops/test_d20s.tsv \ 
+        --word_embedding_dim 128 --model_dim 128 --seq_length 100 \ 
+        --eval_seq_length 3000 --mlp_dim 16 --num_mlp_layers 2 \
+        --optimizer_type Adam --experiment_name RNN_samplerun
 
 ## Log Analysis
 
 This project contains a handful of tools for easier analysis of your model's performance.
 
-For one, after a periodic number of batches, some useful statistics are printed to a file specified by `--log_path`. This is convenient for visual inspection, and the script [parse_logs.py](https://github.com/nyu-mll/spinn/blob/master/scripts/parse_logs.py) is an example of how to easily parse this log file.
+For one, after a periodic number of batches, some useful statistics are printed to a file specified by `--log_path`. This is convenient for visual inspection, and the script [parse_logs.py](https://github.com/nyu-mll/spinn/blob/master/scripts/parse_logs.py) is an example of how to easily parse this log file. 
+
+The script [parse_comparison.py](https://github.com/nyu-mll/spinn/blob/master/scripts/parse_comparison.py) generates statistics about the quality of generated parses. It takes `.report` files as input. These files are generated during model evaluation if the `--write_eval_reports` flag is set to `True`. Here is a sample command,
+
+    python scripts/parse_comparison.py --data_type listops --main_data_path python/spinn/data/listops/test_d20s.tsv --main_report_path_template RNN_samplerun.eval_set_0.report
 
 ## Contributing
 
 If you're interested in proposing a change or fix to SPINN, please submit a Pull Request. In addition, ensure that existing tests pass, and add new tests as you see appropriate. To run tests, simply run this command from the root directory:
 
     nosetests python/spinn/tests
-
-### Adding Logging Fields
-
-SPINN outputs metrics and statistics into a text [protocol buffer](https://developers.google.com/protocol-buffers/) format. When adding new fields to the proto file, the generated proto code needs to be updated.
-
-    bash python/build.sh
 
 ## License
 
