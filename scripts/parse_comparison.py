@@ -30,7 +30,6 @@ LABEL_MAP = {'entailment': 0, 'neutral': 1, 'contradiction': 2}
 FLAGS = gflags.FLAGS
 
 mathops = ["[MAX", "[MIN", "[MED", "[SM"]
-full_list = mathops + [str(i) for i in range(10)] + ["-"]
 
 def spaceify(parse):
     return parse #.replace("(", "( ").replace(")", " )")
@@ -265,13 +264,11 @@ def corpus_stats_labeled(corpus_unlabeled, corpus_labeled):
         total.update(ex_total)
     return correct, total
 
-
-mathops = ["[MAX", "[MIN", "[MED", "[SM"]
-full_list = mathops + [str(i) for i in range(10)] + ["-"]
 def count_parse(parse, index, const_parsed=[]):
     """
-    This is only for ListOps.
+    Compute Constituents Parsed metric for ListOps style examples.
     """
+    mathops = ["[MAX", "[MIN", "[MED", "[SM"]
     if "]" in parse:
         after = parse[index:]
         before = parse[:index]
@@ -285,9 +282,9 @@ def count_parse(parse, index, const_parsed=[]):
             c = count_parse(parse, index+nested_i, const_parsed)
             cc = count_parse(parse, index, const_parsed)
         else:
-            o_b = between.count("(")
-            c_b = between.count(")")
-
+            o_b = between.count("(") # open, between
+            c_b = between.count(")") # close, between
+                
             end = after.index("]")
             cafter = after[end+1:]
             stop = None
@@ -304,7 +301,6 @@ def count_parse(parse, index, const_parsed=[]):
             cafter = cafter[: stop]
             c_a = cafter.count(")")
 
-
             stop = None
             stop_list = []
             for item in before[::-1] :
@@ -319,7 +315,6 @@ def count_parse(parse, index, const_parsed=[]):
             cbefore = before[stop:]
             o_a = cbefore.count("(")
 
-
             ints = sum(c.isdigit() for c in between) + between.count("-")
             op = o_a + o_b
             cl = c_a + c_b
@@ -327,23 +322,7 @@ def count_parse(parse, index, const_parsed=[]):
             if op >= ints and cl >= ints:
                 if op == ints+1 or cl == ints+1:
                     const_parsed.append(1)
-            #    else:
-            #        import pdb; pdb.set_trace()
-            #else:   
-            #    import pdb; pdb.set_trace()
-            
-            if op == ints+1 == cl:
-                parse[index-len(cbefore)+1 : len(before)+len(between)+1+len(cafter)] = '-'
-            elif op == ints+1 and cl  > ints+1:
-                gap = cl - ints - 1
-                parse[index-len(cbefore)+1 : len(before)+len(between)+1+len(cafter)-gap] = '-'
-            elif cl == ints+1 and op  > ints+1:
-                gap = op - ints - 1
-                parse[index-len(cbefore)+1+gap : len(before)+len(between)+1+len(cafter)] = '-'
-            else:
-                parse[index-len(cbefore)+1 : len(before)+len(between)+1+len(cafter)] = '-'
-                #import pdb; pdb.set_trace()
-                
+            parse[index - o_a : index + len(between) + 1 + c_a] = '-'
     return sum(const_parsed)
 
 def to_indexed_contituents(parse, const_parse):
@@ -382,10 +361,6 @@ def to_indexed_contituents(parse, const_parse):
     if const_parse:
         cp = count_parse(sp, first_op, const_parsed)
         max_count = parse.count("]")
-        #if const_parsed > max_count:
-        #    import pdb; pdb.set_trace()
-        #if const_parsed > 1:
-        #    import pdb; pdb.set_trace()
     return indexed_constituents, cp
 
 def to_indexed_contituents_labeled(parse):
@@ -667,7 +642,10 @@ def run():
                 print(to_latex(report[sentence]))
                 print()
 
-        gtf1, gtcp = corpus_stats(report, gt, first_two=FLAGS.first_two, neg_pair=FLAGS.neg_pair, const_parse=True)
+        if FLAGS.data_type == "listops":
+            gtf1, gtcp = corpus_stats(report, gt, first_two=FLAGS.first_two, neg_pair=FLAGS.neg_pair, const_parse=True)
+        else:
+            gtf1, gtcp = corpus_stats(report, gt, first_two=FLAGS.first_two, neg_pair=FLAGS.neg_pair, const_parse=False)
         print("Left:", str(corpus_stats(report, lb)[0]) + '\t' + "Right:", str(corpus_stats(report, rb)[0]) + '\t' + "Groud-truth", str(gtf1) + '\t' + "Tree depth:", str(corpus_average_depth(report)), '\t', "Constituent parsed:", str(gtcp))
         
     correct = Counter()
