@@ -505,6 +505,7 @@ def get_flags():
         "eval_report_use_preds", True, "If False, use the given transitions in the report, "
         "otherwise use predicted transitions. Note that when predicting transitions but not using them, the "
         "reported predictions will look very odd / not valid.")  # TODO: Remove.
+    gflags.DEFINE_boolean("cp_metric", False, "Get evaluation results on consituents parsed in ListOps.")
 
     # Chart-Parsing Variables
     gflags.DEFINE_boolean(
