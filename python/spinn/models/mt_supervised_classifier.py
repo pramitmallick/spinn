@@ -71,7 +71,7 @@ def evaluate(FLAGS, model, eval_set, log_entry,
         eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch, eval_ids = batch
 
         # Run model.
-        output = model(
+        encoder_output = model(
             eval_X_batch,
             eval_transitions_batch,
             eval_y_batch,
@@ -91,6 +91,8 @@ def evaluate(FLAGS, model, eval_set, log_entry,
         if not FLAGS.write_eval_report:
             # Only show one sample, regardless of the number of batches.
             show_sample = False
+
+        import pdb;pdb.set_trace()
 
         # Calculate class accuracy.
         target = torch.from_numpy(eval_y_batch).long()
@@ -226,7 +228,7 @@ def train_loop(
             pyramid_temperature_multiplier = None
 
         # Run model.
-        output = model(
+        output, trg, attention = model(
             X_batch,
             transitions_batch,
             y_batch,
@@ -234,25 +236,19 @@ def train_loop(
             validate_transitions=FLAGS.validate_transitions,
             pyramid_temperature_multiplier=pyramid_temperature_multiplier,
             example_lengths=num_transitions_batch)
-
-        # Calculate class accuracy.
-        target = torch.from_numpy(y_batch).long()
-
-        # get the index of the max log-probability
-        pred = output.data.max(1, keepdim=False)[1].cpu()
-
-        class_acc = pred.eq(target).sum() / float(target.size(0))
-
-        # Calculate class loss.
-        xent_loss = nn.CrossEntropyLoss()(output, to_gpu(Variable(target, volatile=False)))
-
+        criterion = nn.NLLLoss()
+        trg_seq_len=trg.shape[0]
+        mt_loss=0.0
+        for i in range(trg_seq_len):
+            mt_loss+=criterion(output[i], trg[i,:].view(-1))
+        #import pdb;pdb.set_trace()
         # Optionally calculate transition loss.
         transition_loss = model.transition_loss if hasattr(
             model, 'transition_loss') else None
 
         # Accumulate Total Loss Variable
         total_loss = 0.0
-        total_loss += xent_loss
+        total_loss += mt_loss
         if transition_loss is not None and model.optimize_transition_loss:
             total_loss += transition_loss
         aux_loss = auxiliary_loss(model)
@@ -271,12 +267,10 @@ def train_loop(
         total_time = end - start
 
         train_accumulate(model, A, batch)
-        A.add('class_acc', class_acc)
         A.add('total_tokens', total_tokens)
         A.add('total_time', total_time)
 
         if trainer.step % FLAGS.statistics_interval_steps == 0:
-            A.add('xent_cost', xent_loss.data[0])
             stats(model, trainer, A, log_entry)
             should_log = True
             progress_bar.finish()
@@ -366,17 +360,20 @@ def run(only_forward=False):
                json.dumps(FLAGS.FlagValuesDict(), indent=4, sort_keys=True))
 
     # Get Data and Embeddings
-    vocabulary, initial_embeddings, training_data_iter, eval_iterators, training_data_length = \
+    vocabulary, initial_embeddings, training_data_iter, eval_iterators, training_data_length, target_vocabulary = \
         load_data_and_embeddings(FLAGS, data_manager, logger,
-                                 FLAGS.training_data_path, FLAGS.eval_data_path)
+                                 "", FLAGS.eval_data_path)
 
     # Build model.
     vocab_size = len(vocabulary)
-    num_classes = len(set(data_manager.LABEL_MAP.values()))
-
+    if FLAGS.data_type!="mt":
+        num_classes = len(set(data_manager.LABEL_MAP.values()))
+    else:
+        num_classes=None
     model = init_model(
-        FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_manager, header)
+        FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_manager, header, target_vocabulary=target_vocabulary)
     time_to_wait_to_lower_lr = min(10000, int(training_data_length / FLAGS.batch_size))
+    
     trainer = ModelTrainer(model, logger, time_to_wait_to_lower_lr, vocabulary, FLAGS)    
 
     header.start_step = trainer.step

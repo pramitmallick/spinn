@@ -425,7 +425,8 @@ def PreprocessDataset(
         sentence_pair_data=False,
         simple=False,
         allow_cropping=False,
-        pad_from_left=True):
+        pad_from_left=True,
+        target_vocabulary=None):
     dataset = TrimDataset(
         dataset,
         seq_length,
@@ -485,11 +486,19 @@ def PreprocessDataset(
             num_transitions = np.array(
                 [example["num_transitions"] for example in dataset],
                 dtype=np.int32)
-
-    y = np.array(
-        [data_manager.LABEL_MAP[example["label"]] for example in dataset],
-        dtype=np.int32)
-
+    y=[]
+    if target_vocabulary is not None:
+        for x in dataset:
+            tmp=[]
+            for m in x["target_tokens"]:
+                tmp.append(target_vocabulary[m])
+            y.append(tmp)
+        y=np.array(y)
+    else:        
+        y = np.array(
+            [data_manager.LABEL_MAP[example["label"]] for example in dataset],
+            dtype=np.int32)
+    #import pdb;pdb.set_trace()
     # NP Array of Strings
     example_ids = np.array([example["example_id"] for example in dataset])
 
@@ -497,7 +506,7 @@ def PreprocessDataset(
 
 
 def BuildVocabulary(raw_training_data, raw_eval_sets, embedding_path,
-                    logger=None, sentence_pair_data=False):
+                    logger=None, sentence_pair_data=False, token_key="token"):
     # Find the set of words that occur in the data.
     logger.Log("Constructing vocabulary...")
 
@@ -513,7 +522,7 @@ def BuildVocabulary(raw_training_data, raw_eval_sets, embedding_path,
                 [example["hypothesis_tokens"] for example in dataset]))
         else:
             types_in_data.update(itertools.chain.from_iterable(
-                [example["tokens"] for example in dataset]))
+                [example[token_key] for example in dataset]))
     logger.Log("Found " + str(len(types_in_data)) + " word types.")
 
     # Build a vocabulary of words in the data for which we have an

@@ -14,12 +14,12 @@ from spinn.util.blocks import bundle, lstm, to_gpu, unbundle
 from spinn.util.blocks import LayerNormalization
 from spinn.util.misc import Example, Vocab
 from spinn.util.catalan import ShiftProbabilities
-
+import sys
 from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
 
 
 def build_model(data_manager, initial_embeddings, vocab_size,
-                num_classes, FLAGS, context_args, composition_args, **kwargs):
+                num_classes, FLAGS, context_args, composition_args, target_vocabulary=None, **kwargs):
     model_cls = BaseModel
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
 
@@ -46,6 +46,9 @@ def build_model(data_manager, initial_embeddings, vocab_size,
         mlp_ln=FLAGS.mlp_ln,
         context_args=context_args,
         composition_args=composition_args,
+        with_attention=FLAGS.with_attention,
+        data_type=FLAGS.data_type,
+        target_vocabulary=target_vocabulary
     )
 
 
@@ -344,7 +347,7 @@ class SPINN(nn.Module):
 
         # Transition Loop
         # ===============
-
+        attended=[[] for i in range(batch_size)]
         for t_step in range(num_transitions):
             transitions = inp_transitions[:, t_step]
             transition_arr = list(transitions)
@@ -451,7 +454,7 @@ class SPINN(nn.Module):
             # Variables' features would simplify this.
 
             # For SHIFT
-            s_stacks, s_tops, s_trackings, s_idxs = [], [], [], []
+            s_stacks, s_tops, s_trackings, s_idxs, r_idxs = [], [], [], [], []
 
             # For REDUCE
             r_stacks, r_lefts, r_rights, r_trackings = [], [], [], []
@@ -462,6 +465,7 @@ class SPINN(nn.Module):
             for batch_idx, (transition, buf, stack,
                             tracking) in enumerate(batch):
                 if transition == T_SHIFT:  # shift
+                    attended[batch_idx].append(buf[-1][0])
                     self.t_shift(buf, stack, tracking, s_tops, s_trackings)
                     s_idxs.append(batch_idx)
                     s_stacks.append(stack)
@@ -473,17 +477,18 @@ class SPINN(nn.Module):
                         r_lefts,
                         r_rights,
                         r_trackings)
+                    #self.attended[batch_idx].append(buf[-1])
                     r_stacks.append(stack)
+                    r_idxs.append(batch_idx)
                 elif transition == T_SKIP:  # skip
                     self.t_skip()
 
             # Action Phase
             # ============
-
             self.shift_phase(s_tops, s_trackings, s_stacks)
             self.reduce_phase(r_lefts, r_rights, r_trackings, r_stacks)
             self.reduce_phase_hook(r_lefts, r_rights, r_trackings, r_stacks)
-
+            
             # Memory Phase
             # ============
 
@@ -542,9 +547,9 @@ class SPINN(nn.Module):
                 "two zeros and the sentence encoding."
             assert all(len(buf) == 1 for buf in self.bufs), \
                 "Stacks should be fully shifted and have 1 zero."
-
+        [attended[i].append(self.stacks[i][-1][0]) for i in range(batch_size)]
         return [stack[-1]
-                for stack in self.stacks], transition_acc, transition_loss
+                for stack in self.stacks], transition_acc, transition_loss, attended
 
 
 class BaseModel(nn.Module):
@@ -576,6 +581,9 @@ class BaseModel(nn.Module):
                  classifier_keep_rate=None,
                  context_args=None,
                  composition_args=None,
+                 with_attention=False,
+                 data_type=None,
+                 target_vocabulary=None,
                  **kwargs
                  ):
         super(BaseModel, self).__init__()
@@ -594,6 +602,7 @@ class BaseModel(nn.Module):
         self.initial_embeddings = initial_embeddings
         self.word_embedding_dim = word_embedding_dim
         self.model_dim = model_dim
+        self.data_type=data_type
 
         classifier_dropout_rate = 1. - classifier_keep_rate
 
@@ -607,9 +616,21 @@ class BaseModel(nn.Module):
 
         # Build classiifer.
         features_dim = self.get_features_dim()
-        self.mlp = MLP(features_dim, mlp_dim, num_classes,
+        if data_type!="mt":
+            self.mlp = MLP(features_dim, mlp_dim, num_classes,
                        num_mlp_layers, mlp_ln, classifier_dropout_rate)
-
+        else:
+            sys.path.append("/Users/anhadmohananey/OpenNMT-py")
+            from onmt.decoders.decoder import InputFeedRNNDecoder, StdRNNDecoder, RNNDecoderBase
+            from onmt.modules import Embeddings
+            #import onmt
+            self.output_embeddings=Embeddings(200, len(target_vocabulary), 0)
+            self.decoder=StdRNNDecoder("LSTM", False, 1,self.model_dim, embeddings=self.output_embeddings)
+            self.target_vocabulary=target_vocabulary
+            self.generator=nn.Sequential(
+                nn.Linear(self.model_dim, len(self.target_vocabulary), nn.LogSoftmax())
+            )
+            #self.generator = nn.Sequential(nn.Linear(self.model_dim, len(self.target_vocabulary), nn.LogSoftmax())
         self.embedding_dropout_rate = 1. - embedding_keep_rate
 
         # Create dynamic embedding layer.
@@ -658,10 +679,10 @@ class BaseModel(nn.Module):
             use_internal_parser,
             validate_transitions=True):
         self.spinn.reset_state()
-        h_list, transition_acc, transition_loss = self.spinn(
+        h_list, transition_acc, transition_loss, attended = self.spinn(
             example, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
         h = self.wrap(h_list)
-        return h, transition_acc, transition_loss
+        return h, transition_acc, transition_loss, attended
 
     def forward_hook(self, embeds, batch_size, seq_length):
         pass
@@ -704,14 +725,42 @@ class BaseModel(nn.Module):
 
         example.bufs = buffers
 
-        h, transition_acc, transition_loss = self.run_spinn(
-            example, use_internal_parser, validate_transitions)
+        h, transition_acc, transition_loss , attended= self.run_spinn(
+            example, use_internal_parser, validate_transitions)        
         self.spinn_outp = h
 
         self.transition_acc = transition_acc
         self.transition_loss = transition_loss
-
+        self.attention_h=attended
         # Build features
+        if self.data_type=="mt":
+            nfeat=1#5984#self.output_embeddings.embedding_size
+            target_maxlen=max([len(x) for x in y_batch])
+            maxlen= example.tokens.size()[1]#max([len(x) for x in attended])
+            trg=[]
+            for x in y_batch:
+                arr=x+[1]*(target_maxlen-len(x))
+                tmp=[]
+                for y in arr:
+                    la=y
+                    tmp.append([la])
+                trg.append(tmp)
+            actual_dim=self.spinn_outp[0].shape[-1]
+            enc_output=self.spinn_outp[0].view(1,example.tokens.size()[0], actual_dim)
+            padded_enc_output=torch.zeros((1, example.tokens.size()[0], self.model_dim))
+            padded_enc_output[:,:,:actual_dim]=enc_output
+            trg=torch.tensor(trg).view((target_maxlen, example.tokens.size()[0],nfeat))
+            #src=torch.view(embeds, (example.tokens.size()[1], example.tokens.size()[0], self.model_dim))
+            src=embeds.view((example.tokens.size()[1], example.tokens.size()[0], self.model_dim))
+            att=[x+(maxlen-len(x))*[torch.zeros(self.model_dim)] for x in attended]
+            att=[torch.cat(x).view((maxlen,self.model_dim)) for x in att]
+            att=torch.cat(att).view((maxlen, example.tokens.size()[0],self.model_dim))
+            enc_state=self.decoder.init_decoder_state(src, att, (padded_enc_output,padded_enc_output))
+            output_decoder=self.decoder(trg, att,enc_state)
+            #import pdb;pdb.set_trace()
+            output=self.generator(output_decoder[0])
+            #import pdb;pdb.set_trace()
+            return output, trg, att
         features = self.build_features(h)
 
         output = self.mlp(features)

@@ -3,21 +3,25 @@ import json
 import codecs
 import re
 import csv 
-
+FIXED_VOCABULARY = None
+SENTENCE_PAIR_DATA = False
 #source: ( That ( ( 's ( ( a lot ) ( to ( pack ( into ( 18 minutes ) ) ) ) ) ) . ) )
 #target: وأخرج ملتحفا فوطتي، كان الجميع يراني .
 def load_data(source_path, target_path, trg_language="arabic", src_language="english", data_type="gt", is_lowercase=True):
     examples = []
     s_file=open(source_path)
     t_file=open(target_path)
+    i=0
     for element in zip(s_file.readlines(), t_file.readlines()):
         line = element[0].strip()
         s_tokens, s_transitions=convert_binary_bracketing(line, data_type=data_type, lowercase=is_lowercase)
         t_tokens=element[1].lower().split()
         example = {}
-        example["source_tokens"] = s_tokens
-        example["target_tokens"] = t_tokens
-        example["source_transitions"] = s_transitions
+        example["tokens"] = s_tokens
+        example["target_tokens"] = t_tokens+["<s>"]#end token for mt predictions.
+        example["transitions"] = s_transitions
+        example["example_id"]=i
+        i+=1
         examples.append(example)
     return examples
 
