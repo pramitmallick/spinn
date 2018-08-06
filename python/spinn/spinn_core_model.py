@@ -624,7 +624,7 @@ class BaseModel(nn.Module):
             from onmt.decoders.decoder import InputFeedRNNDecoder, StdRNNDecoder, RNNDecoderBase
             from onmt.modules import Embeddings
             #import onmt
-            self.output_embeddings=Embeddings(200, len(target_vocabulary), 0)
+            self.output_embeddings=Embeddings(self.model_dim, len(target_vocabulary)+1, 0)
             self.decoder=StdRNNDecoder("LSTM", False, 1,self.model_dim, embeddings=self.output_embeddings)
             self.target_vocabulary=target_vocabulary
             self.generator=nn.Sequential(
@@ -737,29 +737,50 @@ class BaseModel(nn.Module):
             nfeat=1#5984#self.output_embeddings.embedding_size
             target_maxlen=max([len(x) for x in y_batch])
             maxlen= example.tokens.size()[1]#max([len(x) for x in attended])
-            trg=[]
+            tmp_trg=[]
             for x in y_batch:
                 arr=x+[1]*(target_maxlen-len(x))
                 tmp=[]
                 for y in arr:
                     la=y
-                    tmp.append([la])
+                    tmp.append(la)
+                tmp_trg.append(tmp)
+            trg=[]
+            batch_size=example.tokens.size()[0]
+            for i in range(target_maxlen):
+                tmp=[]
+                for j in range(batch_size):
+                    tmp.append(tmp_trg[j][i])
                 trg.append(tmp)
             actual_dim=self.spinn_outp[0].shape[-1]
-            enc_output=self.spinn_outp[0].view(1,example.tokens.size()[0], actual_dim)
-            padded_enc_output=torch.zeros((1, example.tokens.size()[0], self.model_dim))
+            enc_output=self.spinn_outp[0].view(1,batch_size, actual_dim)
+            padded_enc_output=torch.zeros((1, batch_size, self.model_dim))
             padded_enc_output[:,:,:actual_dim]=enc_output
-            trg=torch.tensor(trg).view((target_maxlen, example.tokens.size()[0],nfeat))
+            trg=torch.tensor(trg).view((target_maxlen, batch_size,nfeat))
             #src=torch.view(embeds, (example.tokens.size()[1], example.tokens.size()[0], self.model_dim))
-            src=embeds.view((example.tokens.size()[1], example.tokens.size()[0], self.model_dim))
+            src=embeds.view((example.tokens.size()[1], batch_size, self.model_dim))
             att=[x+(maxlen-len(x))*[torch.zeros(self.model_dim)] for x in attended]
             att=[torch.cat(x).view((maxlen,self.model_dim)) for x in att]
-            att=torch.cat(att).view((maxlen, example.tokens.size()[0],self.model_dim))
+            att=torch.cat(att,1).view((maxlen, batch_size,self.model_dim))
             enc_state=self.decoder.init_decoder_state(src, att, (padded_enc_output,padded_enc_output))
-            output_decoder=self.decoder(trg, att,enc_state)
-            #import pdb;pdb.set_trace()
-            output=self.generator(output_decoder[0])
-            #import pdb;pdb.set_trace()
+            if self.training:
+                output_decoder=self.decoder(trg, att,enc_state)
+                output=self.generator(output_decoder[0])
+            if not self.training:#now just predict:
+                unk_token=torch.zeros((1, batch_size, 1)).long()
+                inp=unk_token
+                maxpossible=100
+                dec_state=enc_state
+                predicted=[]
+                #TODO: replace with k-beam search
+                for i in range(maxpossible):
+                    #run one step
+                    dec_out, dec_state, attn = self.decoder(inp, att, dec_state, step=i)
+                    out=self.generator(dec_out)
+                    argmaxed=torch.max(out,2)[1]
+                    inp=argmaxed.unsqueeze(2)
+                    predicted.append(list(argmaxed))
+                return predicted
             return output, trg, att
         features = self.build_features(h)
 

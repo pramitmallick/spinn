@@ -71,19 +71,17 @@ def evaluate(FLAGS, model, eval_set, log_entry,
         eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch, eval_ids = batch
 
         # Run model.
-        encoder_output = model(
+        output= model(
             eval_X_batch,
             eval_transitions_batch,
             eval_y_batch,
             use_internal_parser=FLAGS.use_internal_parser,
             validate_transitions=FLAGS.validate_transitions,
             pyramid_temperature_multiplier=pyramid_temperature_multiplier,
-            store_parse_masks=show_sample,
             example_lengths=eval_num_transitions_batch)
-
         can_sample = FLAGS.model_type in ["ChoiPyramid", "Maillard", "CatalanPyramid"] or (
             FLAGS.model_type == "SPINN" and FLAGS.use_internal_parser)
-
+        #import pdb;pdb.set_trace()
         if show_sample and can_sample:
             tmp_samples = model.get_samples(
                 eval_X_batch, vocabulary, only_one=not FLAGS.write_eval_report)
@@ -91,18 +89,20 @@ def evaluate(FLAGS, model, eval_set, log_entry,
         if not FLAGS.write_eval_report:
             # Only show one sample, regardless of the number of batches.
             show_sample = False
-
-        import pdb;pdb.set_trace()
-
         # Calculate class accuracy.
-        target = torch.from_numpy(eval_y_batch).long()
+        # target = torch.from_numpy(eval_y_batch).long()
 
-        # get the index of the max log-probability
-        pred = output.data.max(1, keepdim=False)[1].cpu()
+        # # get the index of the max log-probability
+        # pred = output.data.max(1, keepdim=False)[1].cpu()
 
         eval_accumulate(model, A, batch)
-        A.add('class_correct', pred.eq(target).sum())
-        A.add('class_total', target.size(0))
+        criterion = nn.NLLLoss()
+        trg_seq_len=trg.shape[0]
+        mt_loss=0.0
+        for i in range(trg_seq_len):
+            mt_loss+=criterion(output[i], trg[i,:].view(-1))
+        batch_size=len(eval_y_batch)
+        mt_loss/=batch_size
 
         # Optionally calculate transition loss/acc.
         model.transition_loss if hasattr(model, 'transition_loss') else None
@@ -111,39 +111,6 @@ def evaluate(FLAGS, model, eval_set, log_entry,
         total_tokens += sum([(nt + 1) / \
                             2 for nt in eval_num_transitions_batch.reshape(-1)])
 
-        if FLAGS.write_eval_report:
-            transitions_per_example, _ = model.spinn.get_transitions_per_example(
-                style="preds" if FLAGS.eval_report_use_preds else "given") if (
-                FLAGS.model_type == "SPINN" and FLAGS.use_internal_parser) else (
-                None, None)
-
-            if model.use_sentence_pair:
-                batch_size = pred.size(0)
-                sent1_transitions = transitions_per_example[:batch_size] if transitions_per_example is not None else None
-                sent2_transitions = transitions_per_example[batch_size:] if transitions_per_example is not None else None
-
-                sent1_trees = tree_strs[:batch_size] if tree_strs is not None else None
-                sent2_trees = tree_strs[batch_size:
-                                        ] if tree_strs is not None else None
-            else:
-                sent1_transitions = transitions_per_example if transitions_per_example is not None else None
-                sent2_transitions = None
-
-                sent1_trees = tree_strs if tree_strs is not None else None
-                sent2_trees = None
-
-            reporter.save_batch(
-                pred,
-                target,
-                eval_ids,
-                output.data.cpu().numpy(),
-                sent1_transitions,
-                sent2_transitions,
-                sent1_trees,
-                sent2_trees)
-
-        # Print Progress
-        progress_bar.step(i + 1, total=total_batches)
     progress_bar.finish()
     if tree_strs is not None:
         logger.Log('Sample: ' + tree_strs[0])
@@ -153,18 +120,9 @@ def evaluate(FLAGS, model, eval_set, log_entry,
 
     A.add('total_tokens', total_tokens)
     A.add('total_time', total_time)
-
+    A.add('mt_loss', float(mt_loss))
     eval_stats(model, A, eval_log)
     eval_log.filename = filename
-
-    if FLAGS.write_eval_report:
-        eval_report_path = os.path.join(
-            FLAGS.log_path,
-            FLAGS.experiment_name +
-            ".eval_set_" +
-            str(eval_index) +
-            ".report")
-        reporter.write_report(eval_report_path)
 
     eval_class_acc = eval_log.eval_class_accuracy
     eval_trans_acc = eval_log.eval_transition_accuracy
@@ -241,11 +199,12 @@ def train_loop(
         mt_loss=0.0
         for i in range(trg_seq_len):
             mt_loss+=criterion(output[i], trg[i,:].view(-1))
-        #import pdb;pdb.set_trace()
+        batch_size=len(y_batch)
+        mt_loss/=batch_size
         # Optionally calculate transition loss.
         transition_loss = model.transition_loss if hasattr(
             model, 'transition_loss') else None
-
+        model.mt_loss=mt_loss
         # Accumulate Total Loss Variable
         total_loss = 0.0
         total_loss += mt_loss
@@ -269,7 +228,7 @@ def train_loop(
         train_accumulate(model, A, batch)
         A.add('total_tokens', total_tokens)
         A.add('total_time', total_time)
-
+        A.add('mt_loss', float(mt_loss))
         if trainer.step % FLAGS.statistics_interval_steps == 0:
             stats(model, trainer, A, log_entry)
             should_log = True

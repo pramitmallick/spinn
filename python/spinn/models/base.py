@@ -135,7 +135,7 @@ def load_data_and_embeddings(
                 path, FLAGS.lowercase, choose_eval, eval_mode=True)
         else:
             raw_eval_data = data_manager.load_data(
-                FLAGS.source_training_path, FLAGS.target_training_path)
+                FLAGS.source_eval_path, FLAGS.target_eval_path)
         raw_eval_sets.append((path, raw_eval_data))
 
     # Prepare the vocabulary.
@@ -305,6 +305,8 @@ def get_flags():
     gflags.DEFINE_string("training_data_path", None, "")
     gflags.DEFINE_string("source_training_path", None, "MT source(SNLI format)")
     gflags.DEFINE_string("target_training_path", None, "MT target")
+    gflags.DEFINE_string("source_eval_path", None, "MT source(SNLI format)")
+    gflags.DEFINE_string("target_eval_path", None, "MT target")
     gflags.DEFINE_string(
         "eval_data_path", None, "Can contain multiple file paths, separated "
         "using ':' tokens. The first file should be the dev set, and is used for determining "

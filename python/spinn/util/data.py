@@ -491,7 +491,10 @@ def PreprocessDataset(
         for x in dataset:
             tmp=[]
             for m in x["target_tokens"]:
-                tmp.append(target_vocabulary[m])
+                if m in target_vocabulary:
+                    tmp.append(target_vocabulary[m])
+                else:
+                    tmp.append(0)
             y.append(tmp)
         y=np.array(y)
     else:        

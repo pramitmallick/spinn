@@ -56,6 +56,7 @@ message SpinnEntry {
   optional float time_per_token_seconds = 8;
   optional float learning_rate = 9;
   optional float invalid = 10;
+  optional float mt_loss =24;
   optional string model_label = 22; // If multiple logs print to the same file.
   optional string root_label = 23;
   
