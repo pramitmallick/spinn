@@ -96,13 +96,13 @@ def evaluate(FLAGS, model, eval_set, log_entry,
         # pred = output.data.max(1, keepdim=False)[1].cpu()
 
         eval_accumulate(model, A, batch)
-        criterion = nn.NLLLoss()
-        trg_seq_len=trg.shape[0]
-        mt_loss=0.0
-        for i in range(trg_seq_len):
-            mt_loss+=criterion(output[i], trg[i,:].view(-1))
-        batch_size=len(eval_y_batch)
-        mt_loss/=batch_size
+        # criterion = nn.NLLLoss()
+        # trg_seq_len=trg.shape[0]
+        # mt_loss=0.0
+        # for i in range(trg_seq_len):
+        #     mt_loss+=criterion(output[i], trg[i,:].view(-1))
+        # batch_size=len(eval_y_batch)
+        # mt_loss/=batch_size
 
         # Optionally calculate transition loss/acc.
         model.transition_loss if hasattr(model, 'transition_loss') else None
@@ -120,7 +120,7 @@ def evaluate(FLAGS, model, eval_set, log_entry,
 
     A.add('total_tokens', total_tokens)
     A.add('total_time', total_time)
-    A.add('mt_loss', float(mt_loss))
+    #A.add('mt_loss', float(mt_loss))
     eval_stats(model, A, eval_log)
     eval_log.filename = filename
 
