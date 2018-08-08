@@ -48,7 +48,8 @@ def build_model(data_manager, initial_embeddings, vocab_size,
         composition_args=composition_args,
         with_attention=FLAGS.with_attention,
         data_type=FLAGS.data_type,
-        target_vocabulary=target_vocabulary
+        target_vocabulary=target_vocabulary,
+        onmt_module=FLAGS.onmt_file_path
     )
 
 
@@ -584,6 +585,7 @@ class BaseModel(nn.Module):
                  with_attention=False,
                  data_type=None,
                  target_vocabulary=None,
+                 onmt_module=None,
                  **kwargs
                  ):
         super(BaseModel, self).__init__()
@@ -620,7 +622,7 @@ class BaseModel(nn.Module):
             self.mlp = MLP(features_dim, mlp_dim, num_classes,
                        num_mlp_layers, mlp_ln, classifier_dropout_rate)
         else:
-            sys.path.append("/Users/anhadmohananey/OpenNMT-py")
+            sys.path.append(onmt_module)
             from onmt.decoders.decoder import InputFeedRNNDecoder, StdRNNDecoder, RNNDecoderBase
             from onmt.modules import Embeddings
             #import onmt
@@ -766,7 +768,7 @@ class BaseModel(nn.Module):
             if self.training:
                 output_decoder=self.decoder(trg, att,enc_state)
                 output=self.generator(output_decoder[0])
-            if not self.training:#now just predict:
+            else:#now just predict:
                 unk_token=torch.zeros((1, batch_size, 1)).long()
                 inp=unk_token
                 maxpossible=100

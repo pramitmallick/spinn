@@ -240,7 +240,6 @@ def get_flags():
         "Turn this off when running experiments on HPC.")
     gflags.DEFINE_string("git_branch_name", "", "Set automatically.")
     gflags.DEFINE_string("slurm_job_id", "", "Set automatically.")
-    gflags.DEFINE_string("opennmt_path","","OPENNMT directory path.")
     gflags.DEFINE_integer(
         "deque_length",
         100,
@@ -307,6 +306,7 @@ def get_flags():
     gflags.DEFINE_string("target_training_path", None, "MT target")
     gflags.DEFINE_string("source_eval_path", None, "MT source(SNLI format)")
     gflags.DEFINE_string("target_eval_path", None, "MT target")
+    gflags.DEFINE_string("onmt_file_path", None, "onmt path")
     gflags.DEFINE_string(
         "eval_data_path", None, "Can contain multiple file paths, separated "
         "using ':' tokens. The first file should be the dev set, and is used for determining "

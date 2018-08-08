@@ -19,7 +19,7 @@ from spinn.util.sparks import sparks, dec_str
 import spinn.util.evalb as evalb
 import spinn.util.logging_pb2 as pb
 from spinn.util.trainer import ModelTrainer
-
+import tempfile
 
 # PyTorch
 import torch
@@ -36,7 +36,7 @@ FLAGS = gflags.FLAGS
 
 
 def evaluate(FLAGS, model, eval_set, log_entry,
-             logger, trainer, vocabulary=None, show_sample=False, eval_index=0):
+             logger, trainer, vocabulary=None, show_sample=False, eval_index=0, target_vocabulary=None):
     filename, dataset = eval_set
 
     A = Accumulator()
@@ -66,6 +66,12 @@ def evaluate(FLAGS, model, eval_set, log_entry,
         pyramid_temperature_multiplier = None
 
     model.eval()
+    ref_file_name=FLAGS.log_path+"/ref_file"
+    pred_file_name=FLAGS.log_path+"/pred_file"
+    reference_file=open(ref_file_name, "w")
+    predict_file=open(pred_file_name, "w")
+    full_ref=[]
+    full_pred=[]
     for i, dataset_batch in enumerate(dataset):
         batch = get_batch(dataset_batch)
         eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch, eval_ids = batch
@@ -81,7 +87,6 @@ def evaluate(FLAGS, model, eval_set, log_entry,
             example_lengths=eval_num_transitions_batch)
         can_sample = FLAGS.model_type in ["ChoiPyramid", "Maillard", "CatalanPyramid"] or (
             FLAGS.model_type == "SPINN" and FLAGS.use_internal_parser)
-        #import pdb;pdb.set_trace()
         if show_sample and can_sample:
             tmp_samples = model.get_samples(
                 eval_X_batch, vocabulary, only_one=not FLAGS.write_eval_report)
@@ -89,6 +94,23 @@ def evaluate(FLAGS, model, eval_set, log_entry,
         if not FLAGS.write_eval_report:
             # Only show one sample, regardless of the number of batches.
             show_sample = False
+        ref_out =[" ".join(map(str,k[:-1]))+" ." for k in eval_y_batch]
+        full_ref+=ref_out
+        predicted=[[] for i in range(len(eval_y_batch))]
+        done=[]
+        for x in output:
+            index=-1
+            for x_0 in x[0]:
+                index+=1
+                val=int(x_0)
+                if val==1:
+                    if index in done:
+                        continue
+                    done.append(index)
+                else:
+                    predicted[index].append(val)
+        pred_out =[" ".join(map(str,k[:-1]))+" ." for k in predicted]
+        full_pred+=pred_out       
         # Calculate class accuracy.
         # target = torch.from_numpy(eval_y_batch).long()
 
@@ -111,13 +133,21 @@ def evaluate(FLAGS, model, eval_set, log_entry,
         total_tokens += sum([(nt + 1) / \
                             2 for nt in eval_num_transitions_batch.reshape(-1)])
 
+    reference_file.write("\n".join(full_ref))
+    reference_file.close()
+    predict_file.write("\n".join(full_pred))
+    predict_file.close()
+    bleu_score=os.popen("perl spinn/util/multi-bleu.perl "+ ref_file_name+" < "+pred_file_name).read()
+    print("BLEU"+bleu_score) 
+    bleu_score=float(bleu_score)
     progress_bar.finish()
     if tree_strs is not None:
         logger.Log('Sample: ' + tree_strs[0])
 
     end = time.time()
     total_time = end - start
-
+    A.add('class_correct', bleu_score)
+    A.add('class_total', 1)
     A.add('total_tokens', total_tokens)
     A.add('total_time', total_time)
     #A.add('mt_loss', float(mt_loss))
@@ -137,7 +167,8 @@ def train_loop(
         training_data_iter,
         eval_iterators,
         logger,
-        vocabulary):
+        vocabulary,
+        target_vocabulary):
     # Accumulate useful statistics.
     A = Accumulator(maxlen=FLAGS.deque_length)
 
@@ -291,7 +322,7 @@ def train_loop(
                 acc, _ = evaluate(
                     FLAGS, model, eval_set, log_entry, logger, trainer, show_sample=(
                         trainer.step %
-                        FLAGS.sample_interval_steps == 0), vocabulary=vocabulary, eval_index=index)
+                        FLAGS.sample_interval_steps == 0), vocabulary=vocabulary, eval_index=index, target_vocabulary=target_vocabulary)
                 if  index == 0:
                     trainer.new_dev_accuracy(acc)
             progress_bar.reset()
@@ -353,7 +384,8 @@ def run(only_forward=False):
                 trainer,
                 vocabulary,
                 show_sample=True,
-                eval_index=index)
+                eval_index=index,
+                target_vocabulary=target_vocabulary)
             print(log_entry)
             logger.LogEntry(log_entry)
     else:
@@ -364,7 +396,8 @@ def run(only_forward=False):
             training_data_iter,
             eval_iterators,
             logger,
-            vocabulary)
+            vocabulary,
+            target_vocabulary)
 
 
 if __name__ == '__main__':
