@@ -20,7 +20,7 @@ import spinn.util.evalb as evalb
 import spinn.util.logging_pb2 as pb
 from spinn.util.trainer import ModelTrainer
 import tempfile
-
+from time import gmtime, strftime
 # PyTorch
 import torch
 import torch.nn as nn
@@ -66,8 +66,9 @@ def evaluate(FLAGS, model, eval_set, log_entry,
         pyramid_temperature_multiplier = None
 
     model.eval()
-    ref_file_name=FLAGS.log_path+"/ref_file"
-    pred_file_name=FLAGS.log_path+"/pred_file"
+    curtime=strftime("%Y-%m-%d %H:%M:%S", gmtime())
+    ref_file_name=FLAGS.log_path+"/ref_file"#+curtime
+    pred_file_name=FLAGS.log_path+"/pred_file"#+curtime
     reference_file=open(ref_file_name, "w")
     predict_file=open(pred_file_name, "w")
     full_ref=[]
@@ -85,6 +86,7 @@ def evaluate(FLAGS, model, eval_set, log_entry,
             validate_transitions=FLAGS.validate_transitions,
             pyramid_temperature_multiplier=pyramid_temperature_multiplier,
             example_lengths=eval_num_transitions_batch)
+        #import pdb;pdb.set_trace()
         can_sample = FLAGS.model_type in ["ChoiPyramid", "Maillard", "CatalanPyramid"] or (
             FLAGS.model_type == "SPINN" and FLAGS.use_internal_parser)
         if show_sample and can_sample:
@@ -100,31 +102,19 @@ def evaluate(FLAGS, model, eval_set, log_entry,
         done=[]
         for x in output:
             index=-1
-            for x_0 in x[0]:
+            for x_0 in x:
                 index+=1
                 val=int(x_0)
                 if val==1:
                     if index in done:
                         continue
                     done.append(index)
-                else:
+                elif index not in done:
                     predicted[index].append(val)
-        pred_out =[" ".join(map(str,k[:-1]))+" ." for k in predicted]
+        pred_out =[" ".join(map(str,k))+" ." for k in predicted]
         full_pred+=pred_out       
-        # Calculate class accuracy.
-        # target = torch.from_numpy(eval_y_batch).long()
-
-        # # get the index of the max log-probability
-        # pred = output.data.max(1, keepdim=False)[1].cpu()
 
         eval_accumulate(model, A, batch)
-        # criterion = nn.NLLLoss()
-        # trg_seq_len=trg.shape[0]
-        # mt_loss=0.0
-        # for i in range(trg_seq_len):
-        #     mt_loss+=criterion(output[i], trg[i,:].view(-1))
-        # batch_size=len(eval_y_batch)
-        # mt_loss/=batch_size
 
         # Optionally calculate transition loss/acc.
         model.transition_loss if hasattr(model, 'transition_loss') else None
@@ -137,6 +127,7 @@ def evaluate(FLAGS, model, eval_set, log_entry,
     reference_file.close()
     predict_file.write("\n".join(full_pred))
     predict_file.close()
+    print(full_pred)
     bleu_score=os.popen("perl spinn/util/multi-bleu.perl "+ ref_file_name+" < "+pred_file_name).read()
     print("BLEU"+bleu_score) 
     bleu_score=float(bleu_score)
@@ -217,7 +208,7 @@ def train_loop(
             pyramid_temperature_multiplier = None
 
         # Run model.
-        output, trg, attention = model(
+        output, trg, attention, mask = model(
             X_batch,
             transitions_batch,
             y_batch,
@@ -226,32 +217,43 @@ def train_loop(
             pyramid_temperature_multiplier=pyramid_temperature_multiplier,
             example_lengths=num_transitions_batch)
         criterion = nn.NLLLoss()
-        trg_seq_len=trg.shape[0]
-        mt_loss=0.0
-        for i in range(trg_seq_len):
-            mt_loss+=criterion(output[i], trg[i,:].view(-1))
         batch_size=len(y_batch)
-        mt_loss/=batch_size
+        trg_seq_len=trg.shape[0]
+        print(output[:,1].argmax(1))
+        print(trg[:,1])
+        print(output[:,0].argmax(1))
+        print(trg[:,0])
+        mt_loss=0.0
+        num_classes=output.shape[-1]
+        mask=to_gpu(mask)
+        # import pdb;pdb.set_trace()
+        # #mt_loss=criterion(output.t().contiguous().view(-1, num_classes), Variable(trg.view(-1), volatile=False))
+        for i in range(trg_seq_len):
+            #import pdb;pdb.set_trace()
+            mt_loss+=criterion(output[i,:].index_select(0, mask[i].nonzero().squeeze(1)), trg[i].index_select(0, mask[i].nonzero().squeeze(1)).view(-1))
         # Optionally calculate transition loss.
+        mt_loss=mt_loss/trg_seq_len
         transition_loss = model.transition_loss if hasattr(
             model, 'transition_loss') else None
         model.mt_loss=mt_loss
         # Accumulate Total Loss Variable
         total_loss = 0.0
         total_loss += mt_loss
-        if transition_loss is not None and model.optimize_transition_loss:
-            total_loss += transition_loss
+        # if transition_loss is not None and model.optimize_transition_loss:
+        #     total_loss += transition_loss
         aux_loss = auxiliary_loss(model)
         total_loss= total_loss + aux_loss
         # Backward pass.
+        aa = list(model.parameters())[-1].clone()
         total_loss.backward()
-
+        #[(x,y.grad) for x,y in model.named_parameters()]
         # Hard Gradient Clipping
         nn.utils.clip_grad_norm([param for name, param in model.named_parameters() if name not in ["embed.embed.weight"]], FLAGS.clipping_max_value)
 
         # Gradient descent step.
         trainer.optimizer_step()
-
+        bb = list(model.parameters())[-1].clone()
+        #import pdb;pdb.set_trace()
         end = time.time()
 
         total_time = end - start
