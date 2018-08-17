@@ -229,7 +229,6 @@ def train_loop(
         # import pdb;pdb.set_trace()
         # #mt_loss=criterion(output.t().contiguous().view(-1, num_classes), Variable(trg.view(-1), volatile=False))
         for i in range(trg_seq_len):
-            #import pdb;pdb.set_trace()
             mt_loss+=criterion(output[i,:].index_select(0, mask[i].nonzero().squeeze(1)), trg[i].index_select(0, mask[i].nonzero().squeeze(1)).view(-1))
         # Optionally calculate transition loss.
         mt_loss=mt_loss/trg_seq_len
@@ -253,7 +252,6 @@ def train_loop(
         # Gradient descent step.
         trainer.optimizer_step()
         bb = list(model.parameters())[-1].clone()
-        #import pdb;pdb.set_trace()
         end = time.time()
 
         total_time = end - start

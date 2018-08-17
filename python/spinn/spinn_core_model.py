@@ -624,18 +624,6 @@ class BaseModel(nn.Module):
         if data_type!="mt":
             self.mlp = MLP(features_dim, mlp_dim, num_classes,
                        num_mlp_layers, mlp_ln, classifier_dropout_rate)
-        else:
-            sys.path.append(onmt_module)
-            from onmt.decoders.decoder import InputFeedRNNDecoder, StdRNNDecoder, RNNDecoderBase
-            from onmt.encoders.rnn_encoder import RNNEncoder
-            from onmt.modules import Embeddings
-            self.output_embeddings=Embeddings(self.model_dim, len(target_vocabulary)+1, 0)
-            self.decoder=StdRNNDecoder("LSTM", False, 1,self.model_dim, embeddings=self.output_embeddings)
-            self.target_vocabulary=target_vocabulary
-            self.generator=nn.Sequential(
-                nn.Linear(self.model_dim, len(self.target_vocabulary)+1),
-                nn.LogSoftmax()
-            )
             #self.generator = nn.Sequential(nn.Linear(self.model_dim, len(self.target_vocabulary), nn.LogSoftmax())
         self.embedding_dropout_rate = 1. - embedding_keep_rate
 
@@ -744,84 +732,7 @@ class BaseModel(nn.Module):
         self.attention_h=attended
         # Build features
         if self.data_type=="mt":
-            nfeat=1#5984#self.output_embeddings.embedding_size
-            target_maxlen=max([len(x) for x in y_batch])
-            maxlen= example.tokens.size()[1]#max([len(x) for x in attended])
-            tmp_trg=[]
-            t_mask=[]
-            for x in y_batch:
-                arr=np.array(list(x)+[1]*(target_maxlen-len(x)))
-                t_mask.append([1]*(len(x)+1)+[0]*(target_maxlen-len(x)))
-                #arr=x+[1]*(target_maxlen-len(x))
-                tmp=[]
-                for y in arr:
-                    la=y
-                    tmp.append(la)
-                tmp_trg.append(tmp)
-            trg=[]
-            batch_size=example.tokens.size()[0]
-            t_tmask_trg=[]
-            for i in range(target_maxlen):
-                tmp=[]
-                tmp_mask=[]
-                for j in range(batch_size):
-                    tmp.append(tmp_trg[j][i])
-                    tmp_mask.append(t_mask[j][i])
-                trg.append(tmp)
-                t_tmask_trg.append(tmp_mask)
-            #import pdb;pdb.set_trace()
-            actual_dim=self.spinn_outp[0].shape[-1]
-            enc_output=self.spinn_outp[0].view(1,batch_size, actual_dim)
-            padded_enc_output=to_gpu(torch.zeros((1, batch_size, self.model_dim)))
-            padded_enc_output[:,:,:actual_dim]=enc_output
-            trg=torch.tensor(np.array(trg)).view((target_maxlen, batch_size,nfeat)).long()
-            trg=to_gpu(Variable(trg, volatile=not self.training))
-            src=torch.cat([torch.cat(x[::-1]).unsqueeze(0) for x in example.bufs]).t()           
-            #return output
-            # att=[x+(maxlen-len(x))*[torch.zeros(self.model_dim)] for x in attended]
-            # att=[torch.cat(x).view((maxlen,self.model_dim)) for x in att]
-            # att=torch.cat(att,1).view((maxlen, batch_size,self.model_dim))
-            #(padded_enc_output,padded_enc_output)
-            enc_state=self.decoder.init_decoder_state(src, attended, (padded_enc_output, padded_enc_output))
-            target_forced=False
-            if self.training:
-                if target_forced:
-                    decoder=self.decoder(trg, attended, enc_state)
-                    output=self.generator(decoder[0])
-                else:
-                    unk_token=torch.zeros((1, batch_size, 1)).long()
-                    inp=unk_token
-                    dec_state=enc_state
-                    xx=(padded_enc_output, padded_enc_output)
-                    output=[]
-                    for i in range(target_maxlen+1):
-                        if i==0:
-                            inp=unk_token
-                        else:
-                            inp=trg[i-1].unsqueeze(0)
-                        dec_out, dec_state, attn=self.decoder(inp, attended, dec_state, step=i)
-                        out=self.generator(dec_out.squeeze(0))
-                        argmaxed=torch.max(out,1)[1]
-                        inp=argmaxed.unsqueeze(1).unsqueeze(0)
-                        output.append(out.unsqueeze(0))
-                    output=torch.cat(output)
-            else:#now just predict:
-                unk_token=torch.zeros((1, batch_size, 1)).long()
-                inp=unk_token
-                maxpossible=100
-                dec_state=enc_state
-                predicted=[]
-                xx=(padded_enc_output, padded_enc_output)
-                #TODO: replace with k-beam search
-                #inp= trg[0].unsqueeze(0)
-                for i in range(100):
-                    dec_out, dec_state, attn = self.decoder(inp, attended, dec_state, step=i)
-                    out=self.generator(dec_out.squeeze(0))
-                    argmaxed=torch.max(out,1)[1]
-                    inp=argmaxed.unsqueeze(1).unsqueeze(0)
-                    predicted.append(argmaxed)
-                return predicted
-            return output, trg, attended, torch.tensor(t_tmask_trg)
+            return example, self.spinn_outp, attended, transition_loss, transition_acc
         features = self.build_features(h)
 
         output = self.mlp(features)

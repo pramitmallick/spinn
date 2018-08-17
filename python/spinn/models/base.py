@@ -25,6 +25,7 @@ import spinn.cbow
 import spinn.choi_pyramid
 import spinn.maillard_pyramid
 import spinn.catalan_pyramid
+from spinn.models import mt_model
 
 import spinn.lms
 
@@ -652,8 +653,11 @@ def init_model(
         logfile_header=None,
         target_vocabulary=None):
     # Choose model.
+
     logger.Log("Building model.")
-    if FLAGS.model_type == "CBOW":
+    if FLAGS.data_type=="mt":
+        build_model = mt_model.build_model
+    elif FLAGS.model_type == "CBOW":
         build_model = spinn.cbow.build_model
     elif FLAGS.model_type == "RNN":
         build_model = spinn.plain_rnn.build_model
