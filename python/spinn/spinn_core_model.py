@@ -676,12 +676,12 @@ class BaseModel(nn.Module):
         h_list, transition_acc, transition_loss, attended = self.spinn(
             example, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
         maxlen_attended=max([len(x) for x in attended])
-        attended=[x+(maxlen_attended-len(x))*[torch.zeros(1, self.model_dim)] for x in attended]
-        wrapped_attended=[torch.cat((self.wrap(x)[0], torch.zeros(len(x), self.model_dim/2)),1 ) for x in attended]
+        attended=[x+(maxlen_attended-len(x))*[to_gpu(Variable(torch.zeros(1, self.model_dim)))] for x in attended]
+        attended=[torch.cat((self.wrap(x)[0], to_gpu(Variable(torch.zeros(len(x), int(self.model_dim/2))))),1 ) for x in attended]
+        attended=torch.cat([x.unsqueeze(1) for x in attended],1)
         #import pdb;pdb.set_trace()
-        wrapped_attended=torch.cat([x.unsqueeze(1) for x in wrapped_attended],1)
         h = self.wrap(h_list)
-        return h, transition_acc, transition_loss, wrapped_attended
+        return h, transition_acc, transition_loss, attended
 
     def forward_hook(self, embeds, batch_size, seq_length):
         pass

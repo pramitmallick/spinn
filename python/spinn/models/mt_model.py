@@ -89,8 +89,12 @@ class NMTModel(nn.Module):
                  **kwargs
                  ):
         super(NMTModel, self).__init__()
-        
-        self.encoder=spinn_builder(
+        self.model_type=flags.model_type
+        if self.model_type=="SPINN":
+            encoder_builder=spinn_builder
+        else:
+            encoder_builder=rnn_builder
+        self.encoder=encoder_builder(
             model_dim=model_dim,
             word_embedding_dim=word_embedding_dim,
             vocab_size=vocab_size,
@@ -175,19 +179,22 @@ class NMTModel(nn.Module):
         padded_enc_output=to_gpu(torch.zeros((1, batch_size, self.model_dim)))
         padded_enc_output[:,:,:actual_dim]=enc_output
         trg=torch.tensor(np.array(trg)).view((target_maxlen, batch_size,nfeat)).long()
-        trg=to_gpu(Variable(trg, volatile=not self.training))
-        src=torch.cat([torch.cat(x[::-1]).unsqueeze(0) for x in example.bufs]).transpose(0,1)           
+        trg=to_gpu(Variable(trg, requires_grad=False))
+        if self.model_type=="SPINN":
+            src=torch.cat([torch.cat(x[::-1]).unsqueeze(0) for x in example.bufs]).transpose(0,1)  
+        else:
+            src=example.bufs         
+            attended=attended.transpose(0,1)
         enc_state=self.decoder.init_decoder_state(src, attended, (padded_enc_output, padded_enc_output))
-        target_forced=False
+        target_forced=False;padded_enc_output=None;enc_output=None; t_mask=None; tmp_trg=None
         if self.training:
             if target_forced:
                 decoder=self.decoder(trg, attended, enc_state)
                 output=self.generator(decoder[0])
             else:
-                unk_token=torch.zeros((1, batch_size, 1)).long()
+                unk_token=to_gpu(Variable(torch.zeros((1, batch_size, 1))), requires_grad=False).long()
                 inp=unk_token
                 dec_state=enc_state
-                xx=(padded_enc_output, padded_enc_output)
                 output=[]
                 for i in range(target_maxlen+1):
                     if i==0:
@@ -195,18 +202,14 @@ class NMTModel(nn.Module):
                     else:
                         inp=trg[i-1].unsqueeze(0)
                     dec_out, dec_state, attn=self.decoder(inp, attended, dec_state, step=i)
-                    out=self.generator(dec_out.squeeze(0))
-                    argmaxed=torch.max(out,1)[1]
-                    inp=argmaxed.unsqueeze(1).unsqueeze(0)
-                    output.append(out.unsqueeze(0))
+                    output.append(self.generator(dec_out.squeeze(0)).unsqueeze(0))
                 output=torch.cat(output)
         else:#now just predict:
-            unk_token=torch.zeros((1, batch_size, 1)).long()
+            unk_token=to_gpu(Variable(torch.zeros((1, batch_size, 1))), requires_grad=False).long()
             inp=unk_token
             maxpossible=100
             dec_state=enc_state
             predicted=[]
-            xx=(padded_enc_output, padded_enc_output)
             #TODO: replace with k-beam search
             #inp= trg[0].unsqueeze(0)
             for i in range(100):
@@ -216,7 +219,7 @@ class NMTModel(nn.Module):
                 inp=argmaxed.unsqueeze(1).unsqueeze(0)
                 predicted.append(argmaxed)
             return predicted
-        return output, trg, attended, torch.tensor(t_tmask_trg)
+        return output, trg, None, torch.tensor(t_tmask_trg)
 
 
     

@@ -243,7 +243,6 @@ def train_loop(
         aux_loss = auxiliary_loss(model)
         total_loss= total_loss + aux_loss
         # Backward pass.
-        aa = list(model.parameters())[-1].clone()
         total_loss.backward()
         #[(x,y.grad) for x,y in model.named_parameters()]
         # Hard Gradient Clipping
