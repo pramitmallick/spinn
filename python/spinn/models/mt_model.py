@@ -192,7 +192,7 @@ class NMTModel(nn.Module):
                 decoder=self.decoder(trg, attended, enc_state)
                 output=self.generator(decoder[0])
             else:
-                unk_token=to_gpu(Variable(torch.zeros((1, batch_size, 1))), requires_grad=False).long()
+                unk_token=to_gpu(Variable(torch.zeros((1, batch_size, 1)), requires_grad=False)).long()
                 inp=unk_token
                 dec_state=enc_state
                 output=[]
@@ -205,7 +205,7 @@ class NMTModel(nn.Module):
                     output.append(self.generator(dec_out.squeeze(0)).unsqueeze(0))
                 output=torch.cat(output)
         else:#now just predict:
-            unk_token=to_gpu(Variable(torch.zeros((1, batch_size, 1))), requires_grad=False).long()
+            unk_token=to_gpu(Variable(torch.zeros((1, batch_size, 1)), requires_grad=False)).long()
             inp=unk_token
             maxpossible=100
             dec_state=enc_state
