@@ -132,10 +132,15 @@ class NMTModel(nn.Module):
         from onmt.encoders.rnn_encoder import RNNEncoder
         from onmt.modules import Embeddings
         self.output_embeddings=Embeddings(self.model_dim, len(target_vocabulary)+1, 0)
-        self.decoder=StdRNNDecoder("LSTM", False, 1,self.model_dim, embeddings=self.output_embeddings)
+        if self.model_type=="RNN":
+            self.is_bidirectional=True
+        else:
+            self.is_bidirectional=False
+        mult_factor=2 if self.is_bidirectional else 1
+        self.decoder=StdRNNDecoder("LSTM", self.is_bidirectional, 1,self.model_dim*mult_factor, embeddings=self.output_embeddings)
         self.target_vocabulary=target_vocabulary
         self.generator=nn.Sequential(
-                nn.Linear(self.model_dim, len(self.target_vocabulary)+1),
+                nn.Linear(self.model_dim*mult_factor, len(self.target_vocabulary)+1),
                 nn.LogSoftmax()
             )
 
@@ -174,10 +179,13 @@ class NMTModel(nn.Module):
                 tmp_mask.append(t_mask[j][i])
             trg.append(tmp)
             t_tmask_trg.append(tmp_mask)
-        actual_dim=spinn_outp[0].shape[-1]
-        enc_output=spinn_outp[0].view(1,batch_size, actual_dim)
-        padded_enc_output=to_gpu(torch.zeros((1, batch_size, self.model_dim)))
-        padded_enc_output[:,:,:actual_dim]=enc_output
+        if spinn_outp.shape[-1]!=self.model_dim:
+            actual_dim=spinn_outp[0].shape[-1]
+            enc_output=spinn_outp[0].view(1,batch_size, actual_dim)
+            padded_enc_output=to_gpu(torch.zeros((1, batch_size, self.model_dim)))
+            padded_enc_output[:,:,:actual_dim]=enc_output
+        else:
+            padded_enc_output=spinn_outp
         trg=torch.tensor(np.array(trg)).view((target_maxlen, batch_size,nfeat)).long()
         trg=to_gpu(Variable(trg, requires_grad=False))
         if self.model_type=="SPINN":

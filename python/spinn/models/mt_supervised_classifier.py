@@ -129,8 +129,11 @@ def evaluate(FLAGS, model, eval_set, log_entry,
     predict_file.close()
     print(full_pred)
     bleu_score=os.popen("perl spinn/util/multi-bleu.perl "+ ref_file_name+" < "+pred_file_name).read()
-    print("BLEU"+bleu_score) 
-    bleu_score=float(bleu_score)
+    print("BLEU"+bleu_score)
+    try:
+        bleu_score=float(bleu_score)
+    except:
+        bleu_score=0.0
     progress_bar.finish()
     if tree_strs is not None:
         logger.Log('Sample: ' + tree_strs[0])
