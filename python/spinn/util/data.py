@@ -34,7 +34,7 @@ NUM_TRANSITION_TYPES = 2
 
 
 def TrimDataset(dataset, seq_length, eval_mode=False,
-                sentence_pair_data=False, logger=None, allow_cropping=False):
+                sentence_pair_data=False, logger=None, allow_cropping=False, is_mt=False):
     """Avoid using excessively long training examples."""
 
     if sentence_pair_data:
@@ -43,8 +43,14 @@ def TrimDataset(dataset, seq_length, eval_mode=False,
                 example["premise_transitions"]) <= seq_length and len(
                 example["hypothesis_transitions"]) <= seq_length]
     else:
-        trimmed_dataset = [example for example in dataset if
-                           len(example["transitions"]) <= seq_length]
+        if is_mt:
+            trimmed_dataset = [
+                example for example in dataset if len(
+                    example["tokens"]) <= seq_length and len(
+                    example["target_tokens"]) <= seq_length]
+        else:
+            trimmed_dataset = [example for example in dataset if
+                            len(example["transitions"]) <= seq_length]
 
     diff = len(dataset) - len(trimmed_dataset)
     if eval_mode:
@@ -256,12 +262,11 @@ def MakeTrainingIterator(
         random.shuffle(order)
         order = np.array(order)
 
-        num_splits = 10  # TODO: Should we be smarter about split size?
+        num_splits = 10 # TODO: Should we be smarter about split size?
         order_limit = len(order) // num_splits * num_splits
         order = order[:order_limit]
         order_splits = np.split(order, num_splits)
         batches = []
-
         for split in order_splits:
             # Put indices into buckets based on example length.
             keys = []
@@ -270,7 +275,6 @@ def MakeTrainingIterator(
                 key = get_key(num_transitions)
                 keys.append((i, key))
             keys = sorted(keys, key=lambda __key: __key[1])
-
             # Group indices from buckets into batches, so that
             # examples in each batch have similar length.
             batch = []
@@ -287,7 +291,6 @@ def MakeTrainingIterator(
         idx = -1
         order = list(range(num_batches))
         random.shuffle(order)
-
         while True:
             idx += 1
             if idx >= num_batches:
@@ -427,13 +430,15 @@ def PreprocessDataset(
         allow_cropping=False,
         pad_from_left=True,
         target_vocabulary=None):
+    is_mt = True if target_vocabulary is not None else False
     dataset = TrimDataset(
         dataset,
         seq_length,
         eval_mode=eval_mode,
         sentence_pair_data=sentence_pair_data,
         logger=logger,
-        allow_cropping=allow_cropping)
+        allow_cropping=allow_cropping,
+        is_mt=is_mt)
     dataset = TokensToIDs(
         vocabulary,
         dataset,
