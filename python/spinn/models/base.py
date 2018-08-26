@@ -26,7 +26,7 @@ import spinn.choi_pyramid
 import spinn.maillard_pyramid
 import spinn.catalan_pyramid
 from spinn.models import mt_model
-
+import cpickle as pickle
 import spinn.lms
 
 # PyTorch
@@ -149,7 +149,14 @@ def load_data_and_embeddings(
                 logger=logger,
                 sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
                 token_key="tokens")
-        target_vocabulary=read_plain_dataset(raw_training_data)
+        if FLAGS.target_vocabulary is not None:
+            target_vocabulary=pickle.load(open(FLAGS.target_vocabulary))
+            print("Loading vocabulary")
+        else:
+            target_vocabulary=read_plain_dataset(raw_training_data)
+            vocab_filename=FLAGS.log_path+"_vocab.p"
+            pickle.dump(target_vocabulary,open(vocab_filename, "w"))
+            print("Dumped vocabulary")
     else:
         if not data_manager.FIXED_VOCABULARY:
             vocabulary = util.BuildVocabulary(
@@ -248,7 +255,7 @@ def get_flags():
     gflags.DEFINE_string("git_sha", "", "Set automatically.")
     gflags.DEFINE_string("experiment_name", "", "")
     gflags.DEFINE_string("load_experiment_name", None, "")
-
+    gflags.DEFINE_string("target_vocabulary", None, "MT Target Vocabulary")
     # Data types.
     gflags.DEFINE_enum("data_type",
                        "bl",
