@@ -26,7 +26,7 @@ import spinn.choi_pyramid
 import spinn.maillard_pyramid
 import spinn.catalan_pyramid
 from spinn.models import mt_model
-import cpickle as pickle
+import pickle
 import spinn.lms
 
 # PyTorch
@@ -150,12 +150,12 @@ def load_data_and_embeddings(
                 sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
                 token_key="tokens")
         if FLAGS.target_vocabulary is not None:
-            target_vocabulary=pickle.load(open(FLAGS.target_vocabulary))
+            target_vocabulary=pickle.load(open(FLAGS.target_vocabulary, "rb"))
             print("Loading vocabulary")
         else:
             target_vocabulary=read_plain_dataset(raw_training_data)
-            vocab_filename=FLAGS.log_path+"_vocab.p"
-            pickle.dump(target_vocabulary,open(vocab_filename, "w"))
+            vocab_filename=FLAGS.log_path+"/_vocab.p"
+            pickle.dump(target_vocabulary,open(vocab_filename, "wb"))
             print("Dumped vocabulary")
     else:
         if not data_manager.FIXED_VOCABULARY:

@@ -90,7 +90,7 @@ def evaluate(FLAGS, model, eval_set, log_entry,
         can_sample = FLAGS.model_type in ["ChoiPyramid", "Maillard", "CatalanPyramid"] or (
             FLAGS.model_type == "SPINN" and FLAGS.use_internal_parser)
         if show_sample and can_sample:
-            tmp_samples = model.get_samples(
+            tmp_samples = model.encoder.get_samples(
                 eval_X_batch, vocabulary, only_one=not FLAGS.write_eval_report)
             tree_strs = prettyprint_trees(tmp_samples)
         if not FLAGS.write_eval_report:
@@ -117,7 +117,7 @@ def evaluate(FLAGS, model, eval_set, log_entry,
         eval_accumulate(model, A, batch)
 
         # Optionally calculate transition loss/acc.
-        model.transition_loss if hasattr(model, 'transition_loss') else None
+        model.encoder.transition_loss if hasattr(model.encoder, 'transition_loss') else None
 
         # Update Aggregate Accuracies
         total_tokens += sum([(nt + 1) / \
@@ -127,9 +127,9 @@ def evaluate(FLAGS, model, eval_set, log_entry,
     reference_file.close()
     predict_file.write("\n".join(full_pred))
     predict_file.close()
-    print(full_pred)
+    #print(full_pred)
     bleu_score=os.popen("perl spinn/util/multi-bleu.perl "+ ref_file_name+" < "+pred_file_name).read()
-    print("BLEU"+bleu_score)
+    #print("BLEU"+bleu_score)
     try:
         bleu_score=float(bleu_score)
     except:
@@ -222,27 +222,28 @@ def train_loop(
         criterion = nn.NLLLoss()
         batch_size=len(y_batch)
         trg_seq_len=trg.shape[0]
-        print(output[:,1].argmax(1))
-        print(trg[:,1])
-        print(output[:,0].argmax(1))
-        print(trg[:,0])
+        # print(output[:,1].argmax(1))
+        # print(trg[:,1])
+        # print(output[:,0].argmax(1))
+        # print(trg[:,0])
         mt_loss=0.0
         num_classes=output.shape[-1]
         mask=to_gpu(mask)
-        # import pdb;pdb.set_trace()
         # #mt_loss=criterion(output.t().contiguous().view(-1, num_classes), Variable(trg.view(-1), volatile=False))
         for i in range(trg_seq_len):
             mt_loss+=criterion(output[i,:].index_select(0, mask[i].nonzero().squeeze(1)), trg[i].index_select(0, mask[i].nonzero().squeeze(1)).view(-1))
         # Optionally calculate transition loss.
         mt_loss=mt_loss/trg_seq_len
-        transition_loss = model.transition_loss if hasattr(
-            model, 'transition_loss') else None
+        model.transition_loss = model.encoder.transition_loss if hasattr(
+            model.encoder, 'transition_loss') else None
+        transition_loss=model.transition_loss if hasattr(model, 'transition_loss') else None 
         model.mt_loss=mt_loss
         # Accumulate Total Loss Variable
         total_loss = 0.0
         total_loss += mt_loss
-        # if transition_loss is not None and model.optimize_transition_loss:
-        #     total_loss += transition_loss
+        if transition_loss is not None and model.encoder.optimize_transition_loss:
+            model.optimize_transition_loss=model.encoder.optimize_transition_loss
+            total_loss += transition_loss
         aux_loss = auxiliary_loss(model)
         total_loss= total_loss + aux_loss
         # Backward pass.

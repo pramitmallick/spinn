@@ -135,6 +135,7 @@ class NMTModel(nn.Module):
         if self.model_type=="RNN":
             self.is_bidirectional=True
         else:
+            self.spinn=self.encoder.spinn
             self.is_bidirectional=False
         mult_factor=2 if self.is_bidirectional else 1
         self.decoder=StdRNNDecoder("LSTM", self.is_bidirectional, 1,self.model_dim*mult_factor, embeddings=self.output_embeddings)
@@ -179,7 +180,7 @@ class NMTModel(nn.Module):
                 tmp_mask.append(t_mask[j][i])
             trg.append(tmp)
             t_tmask_trg.append(tmp_mask)
-        if spinn_outp.shape[-1]!=self.model_dim:
+        if isinstance(spinn_outp,list):#spinn_outp.shape[-1]!=self.model_dim:
             actual_dim=spinn_outp[0].shape[-1]
             enc_output=spinn_outp[0].view(1,batch_size, actual_dim)
             padded_enc_output=to_gpu(torch.zeros((1, batch_size, self.model_dim)))
