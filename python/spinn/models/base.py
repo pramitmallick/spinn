@@ -125,7 +125,8 @@ def load_data_and_embeddings(
                 training_data_path, FLAGS.lowercase, eval_mode=False)
         else:
             raw_training_data = data_manager.load_data(
-                FLAGS.source_training_path, FLAGS.target_training_path)
+                FLAGS.source_training_path, FLAGS.target_training_path,data_type=FLAGS.transition_mode)
+            import pdb;pdb.set_trace()
     else:
         raw_training_data = None
 
@@ -136,7 +137,8 @@ def load_data_and_embeddings(
                 path, FLAGS.lowercase, choose_eval, eval_mode=True)
         else:
             raw_eval_data = data_manager.load_data(
-                FLAGS.source_eval_path, FLAGS.target_eval_path)
+                FLAGS.source_eval_path, FLAGS.target_eval_path, data_type=FLAGS.transition_mode)
+            
         raw_eval_sets.append((path, raw_eval_data))
 
     # Prepare the vocabulary.
@@ -246,6 +248,10 @@ def get_flags():
         "show_progress_bar",
         True,
         "Turn this off when running experiments on HPC.")
+    gflags.DEFINE_string(
+        "transition_mode",
+        "gt",
+        "lb/bal/gt: Transition sequence(left branching(lb), balanced(bal), ground truth(gt)")
     gflags.DEFINE_string("git_branch_name", "", "Set automatically.")
     gflags.DEFINE_string("slurm_job_id", "", "Set automatically.")
     gflags.DEFINE_integer(
