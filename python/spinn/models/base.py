@@ -126,7 +126,6 @@ def load_data_and_embeddings(
         else:
             raw_training_data = data_manager.load_data(
                 FLAGS.source_training_path, FLAGS.target_training_path,data_type=FLAGS.transition_mode)
-            import pdb;pdb.set_trace()
     else:
         raw_training_data = None
 
