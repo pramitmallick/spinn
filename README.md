@@ -1,5 +1,3 @@
-# Stack-augmented Parser-Interpreter Neural Network
-
 This repository was used for the paper [A Fast Unified Model for Sentence Parsing and Understanding][1] and [original codebase][9], and is under active development for further projects. For a more informal introduction to the ideas behind the model, see this [Stanford NLP blog post][8].
 
 ### Installation
