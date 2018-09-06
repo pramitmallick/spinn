@@ -1,4 +1,4 @@
-This repository was used for the paper [A Fast Unified Model for Sentence Parsing and Understanding][1] and [original codebase][9], and is under active development for further projects. For a more informal introduction to the ideas behind the model, see this [Stanford NLP blog post][8].
+This repository was first used for the paper [A Fast Unified Model for Sentence Parsing and Understanding][https://arxiv.org/abs/1603.06021], adapted for [several][https://arxiv.org/pdf/1711.03602.pdf] [subsequent][http://aclweb.org/anthology/N18-4013] [papers][https://arxiv.org/pdf/1709.01121.pdf], and is under active development for related future projects. It contains code for sentence understanding models that use tree structure or dynamic graph structure.
 
 ### Installation
 
