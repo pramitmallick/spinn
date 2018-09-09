@@ -15,7 +15,10 @@ def load_data(source_path, target_path, trg_language="arabic", src_language="eng
     for element in zip(s_file.readlines(), t_file.readlines()):
         line = element[0].strip()
         s_tokens, s_transitions=convert_binary_bracketing(line, data_type=data_type, lowercase=is_lowercase)
-        t_tokens=element[1].lower().split()
+        if trg_language=="zh":
+            t_tokens=list(element[1])
+        else:
+            t_tokens=element[1].lower().split()
         example = {}
         example["tokens"] = s_tokens
         example["target_tokens"] = t_tokens+["<s>"]#end token for mt predictions.

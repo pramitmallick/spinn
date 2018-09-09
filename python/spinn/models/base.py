@@ -125,7 +125,7 @@ def load_data_and_embeddings(
                 training_data_path, FLAGS.lowercase, eval_mode=False)
         else:
             raw_training_data = data_manager.load_data(
-                FLAGS.source_training_path, FLAGS.target_training_path,data_type=FLAGS.transition_mode)
+                FLAGS.source_training_path, FLAGS.target_training_path,data_type=FLAGS.transition_mode, trg_language=FLAGS.target_language)
     else:
         raw_training_data = None
 
@@ -226,7 +226,7 @@ def load_data_and_embeddings(
         return vocabulary, initial_embeddings, training_data_iter, eval_iterators, training_data_length, target_vocabulary
     return vocabulary, initial_embeddings, training_data_iter, eval_iterators, training_data_length
 
-def read_plain_dataset(dataset):
+def read_plain_dataset(dataset, utf_encoder=False):
     vocab={}
     c=2
     vocab["<s>"]=1 #to signify end of line.
@@ -261,6 +261,7 @@ def get_flags():
     gflags.DEFINE_string("experiment_name", "", "")
     gflags.DEFINE_string("load_experiment_name", None, "")
     gflags.DEFINE_string("target_vocabulary", None, "MT Target Vocabulary")
+    gflags.DEFINE_string("target_language", "de", "de/ar/zh")
     # Data types.
     gflags.DEFINE_enum("data_type",
                        "bl",
