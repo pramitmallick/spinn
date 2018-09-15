@@ -136,7 +136,7 @@ def load_data_and_embeddings(
                 path, FLAGS.lowercase, choose_eval, eval_mode=True)
         else:
             raw_eval_data = data_manager.load_data(
-                FLAGS.source_eval_path, FLAGS.target_eval_path, data_type=FLAGS.transition_mode)
+                FLAGS.source_eval_path, FLAGS.target_eval_path, data_type=FLAGS.transition_mode, trg_language=FLAGS.target_language)
             
         raw_eval_sets.append((path, raw_eval_data))
 
