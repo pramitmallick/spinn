@@ -209,7 +209,10 @@ class SPINN(nn.Module):
             # TODO: Support no transitions. In the meantime, must at least pass
             # dummy transitions.
             raise ValueError('Transitions must be included.')
-        return self.run(example.transitions,
+
+        self.example = example
+
+        return self.run(example, example.transitions,
                         run_internal_parser=True,
                         use_internal_parser=use_internal_parser,
                         validate_transitions=validate_transitions)
@@ -344,7 +347,6 @@ class SPINN(nn.Module):
 
         # Transition Loop
         # ===============
-
         for t_step in range(num_transitions):
             transitions = inp_transitions[:, t_step]
             transition_arr = list(transitions)
@@ -496,7 +498,7 @@ class SPINN(nn.Module):
 
             # Update number of non-skip actions seen so far.
             self.n_steps += (np.array(transition_arr) != T_SKIP)
-
+        
         # Loss Phase
         # ==========
         if hasattr(self, 'tracker') and hasattr(self, 'transition_net'):
@@ -717,6 +719,7 @@ class BaseModel(nn.Module):
         output = self.mlp(features)
 
         self.output_hook(output, sentences, transitions, y_batch)
+
 
         return output
 
