@@ -267,11 +267,11 @@ class BaseModel(_BaseModel):
             lb_tree = np.tile(lb_tree, (self.spinn.example.transitions.shape[0],1))
             self.spinn.example.lbtransitions = lb_tree
 
-            h_lblist, lb_transition_acc, lb_transition_loss = self.spinn.run(self.spinn.example, 
-                self.spinn.example.lbtransitions,
+            h_lblist, lb_transition_acc, lb_transition_loss = self.spinn.run(self.spinn.example.lbtransitions,
                 run_internal_parser=False,
                 use_internal_parser=False,
                 validate_transitions=True)
+            
             if self.use_sentence_pair:
                 batch_size = len(h_lblist) // 2
                 h_1 = self.spinn.extract_h(self.spinn.wrap_items(h_lblist[:batch_size]))
