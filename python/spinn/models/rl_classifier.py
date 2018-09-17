@@ -115,7 +115,6 @@ def evaluate(FLAGS, model, eval_set, log_entry,
                 sent1_trees = tree_strs if tree_strs is not None else None
                 sent2_trees = None
 
-            #cp_metric = True # Flagify this
             if FLAGS.cp_metric:
                 cp, cp_max = reporter.save_batch(
                     pred,

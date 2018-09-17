@@ -148,6 +148,12 @@ class BaseModel(_BaseModel):
             self.v_mlp = MLP(self.v_mlp_dim,
                              mlp_dim=self.rl_value_size, num_classes=1, num_mlp_layers=2,
                              mlp_ln=True, classifier_dropout_rate=0.1)
+        if self.rl_baseline == "lbtree":
+            num_outputs = 2 if self.use_sentence_pair else 1
+            # To-do: make new flag to replace rl_value_size
+            self.lb_mlp = MLP(self.model_dim // 2,
+                             mlp_dim=self.rl_value_size, num_classes=1, num_mlp_layers=2,
+                             mlp_ln=True, classifier_dropout_rate=0.1)
 
         self.register_buffer('baseline', torch.FloatTensor([0.0]))
 
@@ -181,7 +187,6 @@ class BaseModel(_BaseModel):
                 self.baseline_outp = self.v_mlp(hn_both.squeeze())
             else:
                 self.baseline_outp = self.v_mlp(hn.squeeze())
-                #import pdb; pdb.set_trace()
 
     def run_greedy(self, sentences, transitions):
         inference_model_cls = BaseModel
@@ -218,7 +223,6 @@ class BaseModel(_BaseModel):
         return rewards
 
     def build_baseline(self, rewards, sentences, transitions, y_batch=None):
-        #print(transitions)
         if self.rl_baseline == "ema":
             mu = self.rl_mu
             baseline = self.baseline[0]
@@ -250,8 +254,49 @@ class BaseModel(_BaseModel):
                     Variable(rewards, volatile=not self.training)))
             else:
                 raise NotImplementedError
-
+                
             baseline = baseline.data.cpu()
+        elif self.rl_baseline == "lbtree":
+            lb_tree = [0, 0, 1]
+            while len(lb_tree) < self.spinn.example.transitions.shape[1]:
+                if len(lb_tree) % 2 == 0:
+                    lb_tree.append(1)
+                else:
+                    lb_tree.append(0)
+            lb_tree = np.asarray(lb_tree)
+            lb_tree = np.tile(lb_tree, (self.spinn.example.transitions.shape[0],1))
+            self.spinn.example.lbtransitions = lb_tree
+
+            h_lblist, lb_transition_acc, lb_transition_loss = self.spinn.run(self.spinn.example, 
+                self.spinn.example.lbtransitions,
+                run_internal_parser=False,
+                use_internal_parser=False,
+                validate_transitions=True)
+            if self.use_sentence_pair:
+                batch_size = len(h_lblist) // 2
+                h_1 = self.spinn.extract_h(self.spinn.wrap_items(h_lblist[:batch_size]))
+                h_2 = self.spinn.extract_h(self.spinn.wrap_items(h_lblist[batch_size:]))
+                hn_both = torch.cat([h1, h2], 1)
+                self.baseline_outp = self.lb_mlp(hn_both)
+            else:
+                hn = self.spinn.extract_h(self.spinn.wrap_items(h_lblist))
+                self.baseline_outp = self.lb_mlp(hn)
+
+            # Estimate loss with value function.
+            output = self.baseline_outp
+            if self.rl_reward == "standard":
+                baseline = F.sigmoid(output).view(-1)
+                self.value_loss = nn.BCELoss()(baseline, to_gpu(
+                    Variable(rewards, volatile=not self.training)))
+            elif self.rl_reward == "xent":
+                baseline = output.view(-1)
+                self.value_loss = nn.MSELoss()(baseline, to_gpu(
+                    Variable(rewards, volatile=not self.training)))
+            else:
+                raise NotImplementedError
+                
+            baseline = baseline.data.cpu()
+
         else:
             raise NotImplementedError
 
@@ -352,6 +397,7 @@ class BaseModel(_BaseModel):
         # Get Baseline.
         baseline = self.build_baseline(
             rewards, sentences, transitions, y_batch)
+
 
         # Calculate advantage.
         advantage = rewards - baseline
