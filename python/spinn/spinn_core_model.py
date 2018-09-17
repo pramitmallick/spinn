@@ -216,7 +216,7 @@ class SPINN(nn.Module):
 
         self.example = example
 
-        return self.run(example, example.transitions,
+        return self.run(example.transitions,
                         run_internal_parser=True,
                         use_internal_parser=use_internal_parser,
                         validate_transitions=validate_transitions)
@@ -682,7 +682,7 @@ class BaseModel(nn.Module):
         attended=[x+(maxlen_attended-len(x))*[to_gpu(Variable(torch.zeros(1, self.model_dim)))] for x in attended]
         attended=[torch.cat((self.wrap(x)[0], to_gpu(Variable(torch.zeros(len(x), int(self.model_dim/2))))),1 ) for x in attended]
         attended=torch.cat([x.unsqueeze(1) for x in attended],1)
-        #import pdb;pdb.set_trace()
+
         h = self.wrap(h_list)
         return h, transition_acc, transition_loss, attended
 

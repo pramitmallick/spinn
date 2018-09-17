@@ -169,6 +169,8 @@ def load_data_and_embeddings(
         else:
             vocabulary = data_manager.FIXED_VOCABULARY
             logger.Log("In fixed vocabulary mode. Training embeddings from scratch.")
+        target_vocabulary = None
+
     # Load pretrained embeddings.
     if FLAGS.embedding_data_path:
         logger.Log("Loading vocabulary with " + str(len(vocabulary))
@@ -782,8 +784,13 @@ def init_model(
 
     composition_args.composition = composition
 
-    model = build_model(data_manager, initial_embeddings, vocab_size,
-                        num_classes, FLAGS, context_args, composition_args, target_vocabulary)
+    if FLAGS.data_type == "mt":
+        model = build_model(data_manager, initial_embeddings, vocab_size,
+            num_classes, FLAGS, context_args, composition_args, target_vocabulary)
+    else:
+        model = build_model(data_manager, initial_embeddings, vocab_size,
+            num_classes, FLAGS, context_args, composition_args)
+
 
     # Debug
     def set_debug(self):
