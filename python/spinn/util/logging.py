@@ -19,6 +19,7 @@ class InspectModel(object):
             model, 'transition_loss') and model.transition_loss is not None
         self.has_invalid = self.has_spinn and hasattr(model.spinn, 'invalid')
         self.has_policy = self.has_spinn and hasattr(model, 'policy_loss')
+        self.has_mt_loss= self.has_spinn and hasattr(model, 'mt_loss')
         self.has_value = self.has_spinn and hasattr(model, 'value_loss')
         self.has_epsilon = self.has_spinn and hasattr(model.spinn, "epsilon")
         self.has_spinn_temperature = self.has_spinn and hasattr(
@@ -88,7 +89,7 @@ def stats(model, trainer, A, log_entry):
     total_cost = log_entry.cross_entropy_cost
     if im.has_transition_loss:
         log_entry.transition_accuracy = avg_trans_acc
-        log_entry.transition_cost = model.transition_loss.data[0]
+        log_entry.transition_cost = float(model.transition_loss.data[0])
         if model.optimize_transition_loss:
             total_cost += log_entry.transition_cost
     if im.has_invalid:
@@ -99,7 +100,9 @@ def stats(model, trainer, A, log_entry):
         A.get('adv_mean_magnitude'), dtype=np.float32)
     adv_var = np.array(A.get('adv_var'), dtype=np.float32)
     adv_var_magnitude = np.array(A.get('adv_var_magnitude'), dtype=np.float32)
-
+    if hasattr(model, 'mt_loss'):
+        log_entry.mt_loss=A.get_avg('mt_loss')
+        total_cost += log_entry.mt_loss
     if im.has_policy:
         log_entry.policy_cost = A.get_avg('policy_cost')
         total_cost += log_entry.policy_cost
@@ -160,7 +163,10 @@ def eval_stats(model, A, eval_data):
 
     class_correct = A.get('class_correct')
     class_total = A.get('class_total')
-    class_acc = sum(class_correct) / float(sum(class_total))
+    if sum(class_total)!=0:
+        class_acc = sum(class_correct) / float(sum(class_total))
+    else:
+        class_acc=0
     eval_data.eval_class_accuracy = class_acc
 
     if im.has_transition_loss:
@@ -191,6 +197,8 @@ def train_format(log_entry, extra=False, rl=False):
         stats_str += " po {policy_cost:.5f}"
     if log_entry.HasField('value_cost'):
         stats_str += " va {value_cost:.5f}"
+    if log_entry.HasField('mt_loss'):
+        stats_str += " mtloss({mt_loss:.5f})"
 
     # Time Component.
     stats_str += " Time: {time:.5f}"
@@ -221,7 +229,6 @@ def train_format(log_entry, extra=False, rl=False):
 
 def eval_format(evaluation, extra=False):
     eval_str = "Step: {step} Eval acc: cl {class_acc:.5f} tr {transition_acc:.5f} {filename} Time: {time:.5f}"
-
     if extra and evaluation.HasField('invalid'):
         eval_str += "\nEval Extra:"
         eval_str += " inv {invalid:.3f}"
@@ -261,6 +268,7 @@ def log_formatter(log_entry, extra=False, rl=False):
         'mean_adv_var_magnitude': log_entry.mean_adv_var_magnitude,
         'epsilon': log_entry.epsilon,
         'temperature': log_entry.temperature,
+        'mt_loss':log_entry.mt_loss,
     }
 
     log_str = train_format(log_entry, extra, rl).format(**args)

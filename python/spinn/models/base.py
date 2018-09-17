@@ -13,6 +13,7 @@ from spinn.data.boolean import load_boolean_data
 from spinn.data.listops import load_listops_data
 from spinn.data.sst import load_sst_data, load_sst_binary_data
 from spinn.data.nli import load_nli_data
+from spinn.data.mt import load_mt_data
 from spinn.util.blocks import EncodeGRU, IntraAttention, Linear, ReduceTreeGRU, ReduceTreeLSTM, ReduceTensor,  bundle
 from spinn.util.misc import Args
 from spinn.util.logparse import parse_flags
@@ -24,7 +25,8 @@ import spinn.cbow
 import spinn.choi_pyramid
 import spinn.maillard_pyramid
 import spinn.catalan_pyramid
-
+from spinn.models import mt_model
+import pickle
 import spinn.lms
 
 # PyTorch
@@ -94,6 +96,8 @@ def get_data_manager(data_type):
         data_manager = load_eq_data
     elif data_type == "relational":
         data_manager = load_relational_data
+    elif data_type=="mt":
+        data_manager= load_mt_data
     else:
         raise NotImplementedError
 
@@ -114,31 +118,57 @@ def load_data_and_embeddings(
     def choose_eval(x): return True
     if FLAGS.eval_genre is not None:
         def choose_eval(x): return x.get('genre') == FLAGS.eval_genre
-
+            
     if not FLAGS.expanded_eval_only_mode:
-        raw_training_data = data_manager.load_data(
-            training_data_path, FLAGS.lowercase, eval_mode=False)
+        if FLAGS.data_type!="mt":
+            raw_training_data = data_manager.load_data(
+                training_data_path, FLAGS.lowercase, eval_mode=False)
+        else:
+            raw_training_data = data_manager.load_data(
+                FLAGS.source_training_path, FLAGS.target_training_path,data_type=FLAGS.transition_mode, trg_language=FLAGS.target_language)
     else:
         raw_training_data = None
 
     raw_eval_sets = []
     for path in eval_data_path.split(':'):
-        raw_eval_data = data_manager.load_data(
-            path, FLAGS.lowercase, choose_eval, eval_mode=True)
+        if FLAGS.data_type!="mt":
+            raw_eval_data = data_manager.load_data(
+                path, FLAGS.lowercase, choose_eval, eval_mode=True)
+        else:
+            raw_eval_data = data_manager.load_data(
+                FLAGS.source_eval_path, FLAGS.target_eval_path, data_type=FLAGS.transition_mode, trg_language=FLAGS.target_language)
+            
         raw_eval_sets.append((path, raw_eval_data))
 
     # Prepare the vocabulary.
-    if not data_manager.FIXED_VOCABULARY:
+    if FLAGS.data_type=="mt":
+        #source vocab
         vocabulary = util.BuildVocabulary(
-            raw_training_data,
-            raw_eval_sets,
-            FLAGS.embedding_data_path,
-            logger=logger,
-            sentence_pair_data=data_manager.SENTENCE_PAIR_DATA)
+                raw_training_data,
+                raw_eval_sets,
+                FLAGS.embedding_data_path,
+                logger=logger,
+                sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
+                token_key="tokens")
+        if FLAGS.target_vocabulary is not None:
+            target_vocabulary=pickle.load(open(FLAGS.target_vocabulary, "rb"))
+            print("Loading vocabulary")
+        else:
+            target_vocabulary=read_plain_dataset(raw_training_data)
+            vocab_filename=FLAGS.log_path+"/_vocab.p"
+            pickle.dump(target_vocabulary,open(vocab_filename, "wb"))
+            print("Dumped vocabulary")
     else:
-        vocabulary = data_manager.FIXED_VOCABULARY
-        logger.Log("In fixed vocabulary mode. Training embeddings from scratch.")
-
+        if not data_manager.FIXED_VOCABULARY:
+            vocabulary = util.BuildVocabulary(
+                raw_training_data,
+                raw_eval_sets,
+                FLAGS.embedding_data_path,
+                logger=logger,
+                sentence_pair_data=data_manager.SENTENCE_PAIR_DATA)
+        else:
+            vocabulary = data_manager.FIXED_VOCABULARY
+            logger.Log("In fixed vocabulary mode. Training embeddings from scratch.")
     # Load pretrained embeddings.
     if FLAGS.embedding_data_path:
         logger.Log("Loading vocabulary with " + str(len(vocabulary))
@@ -162,7 +192,8 @@ def load_data_and_embeddings(
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             simple=sequential_only(),
             allow_cropping=FLAGS.allow_cropping,
-            pad_from_left=pad_from_left()) if raw_training_data is not None else None
+            pad_from_left=pad_from_left(),
+            target_vocabulary=target_vocabulary) if raw_training_data is not None else None
         training_data_iter = util.MakeTrainingIterator(
             training_data, FLAGS.batch_size, FLAGS.smart_batching, FLAGS.use_peano,
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA) if raw_training_data is not None else None
@@ -181,7 +212,8 @@ def load_data_and_embeddings(
             data_manager, eval_mode=True, logger=logger,
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             simple=sequential_only(),
-            allow_cropping=FLAGS.allow_eval_cropping, pad_from_left=pad_from_left())
+            allow_cropping=FLAGS.allow_eval_cropping, pad_from_left=pad_from_left(),
+            target_vocabulary=target_vocabulary)
         eval_it = util.MakeEvalIterator(
             eval_data,
             FLAGS.batch_size,
@@ -190,9 +222,20 @@ def load_data_and_embeddings(
             shuffle=FLAGS.shuffle_eval,
             rseed=FLAGS.shuffle_eval_seed)
         eval_iterators.append((filename, eval_it))
-
+    if FLAGS.data_type=="mt":
+        return vocabulary, initial_embeddings, training_data_iter, eval_iterators, training_data_length, target_vocabulary
     return vocabulary, initial_embeddings, training_data_iter, eval_iterators, training_data_length
 
+def read_plain_dataset(dataset, utf_encoder=False):
+    vocab={}
+    c=2
+    vocab["<s>"]=1 #to signify end of line.
+    for x in dataset:
+        for v in x["target_tokens"]:
+            if v not in vocab:
+                vocab[v]=c
+                c+=1
+    return vocab
 
 def get_flags():
     # Debug settings.
@@ -204,6 +247,10 @@ def get_flags():
         "show_progress_bar",
         True,
         "Turn this off when running experiments on HPC.")
+    gflags.DEFINE_string(
+        "transition_mode",
+        "gt",
+        "lb/bal/gt: Transition sequence(left branching(lb), balanced(bal), ground truth(gt)")
     gflags.DEFINE_string("git_branch_name", "", "Set automatically.")
     gflags.DEFINE_string("slurm_job_id", "", "Set automatically.")
     gflags.DEFINE_integer(
@@ -213,7 +260,8 @@ def get_flags():
     gflags.DEFINE_string("git_sha", "", "Set automatically.")
     gflags.DEFINE_string("experiment_name", "", "")
     gflags.DEFINE_string("load_experiment_name", None, "")
-
+    gflags.DEFINE_string("target_vocabulary", None, "MT Target Vocabulary")
+    gflags.DEFINE_string("target_language", "de", "de/ar/zh")
     # Data types.
     gflags.DEFINE_enum("data_type",
                        "bl",
@@ -225,7 +273,8 @@ def get_flags():
                         "listops",
                         "sign",
                         "eq",
-                        "relational"],
+                        "relational",
+                        "mt"],
                        "Which data handler and classifier to use.")
 
     # Choose Genre.
@@ -259,9 +308,19 @@ def get_flags():
         "load_best",
         False,
         "If True, attempt to load 'best' checkpoint.")
-
+    
+    gflags.DEFINE_boolean(
+        "with_attention",
+        False,
+        "If True, add all tree internal/leaf nodes to the output of SPINN.")
+    
     # Data settings.
     gflags.DEFINE_string("training_data_path", None, "")
+    gflags.DEFINE_string("source_training_path", None, "MT source(SNLI format)")
+    gflags.DEFINE_string("target_training_path", None, "MT target")
+    gflags.DEFINE_string("source_eval_path", None, "MT source(SNLI format)")
+    gflags.DEFINE_string("target_eval_path", None, "MT target")
+    gflags.DEFINE_string("onmt_file_path", None, "onmt path")
     gflags.DEFINE_string(
         "eval_data_path", None, "Can contain multiple file paths, separated "
         "using ':' tokens. The first file should be the dev set, and is used for determining "
@@ -605,10 +664,14 @@ def init_model(
         vocab_size,
         num_classes,
         data_manager,
-        logfile_header=None):
+        logfile_header=None,
+        target_vocabulary=None):
     # Choose model.
+
     logger.Log("Building model.")
-    if FLAGS.model_type == "CBOW":
+    if FLAGS.data_type=="mt":
+        build_model = mt_model.build_model
+    elif FLAGS.model_type == "CBOW":
         build_model = spinn.cbow.build_model
     elif FLAGS.model_type == "RNN":
         build_model = spinn.plain_rnn.build_model
@@ -720,7 +783,7 @@ def init_model(
     composition_args.composition = composition
 
     model = build_model(data_manager, initial_embeddings, vocab_size,
-                        num_classes, FLAGS, context_args, composition_args)
+                        num_classes, FLAGS, context_args, composition_args, target_vocabulary)
 
     # Debug
     def set_debug(self):

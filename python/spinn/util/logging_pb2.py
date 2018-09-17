@@ -550,6 +550,13 @@ _SPINNENTRY = _descriptor.Descriptor(
             message_type=None, enum_type=None, containing_type=None,
             is_extension=False, extension_scope=None,
             options=None),
+         _descriptor.FieldDescriptor(
+            name='mt_loss', full_name='logging.SpinnEntry.mt_loss', index=23,
+            number=22, type=2, cpp_type=6, label=1,
+            has_default_value=False, default_value=float(0),
+            message_type=None, enum_type=None, containing_type=None,
+            is_extension=False, extension_scope=None,
+            options=None),
     ],
     extensions=[
     ],

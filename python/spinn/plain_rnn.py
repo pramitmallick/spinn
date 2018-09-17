@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
-
+from spinn.util.misc import Example, Vocab
 from spinn.util.blocks import Embed, to_gpu, MLP
 from spinn.util.misc import Args, Vocab
 
@@ -31,6 +31,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
         mlp_dim=FLAGS.mlp_dim,
         num_mlp_layers=FLAGS.num_mlp_layers,
         mlp_ln=FLAGS.mlp_ln,
+        data_type=FLAGS.data_type,
         context_args=context_args,
     )
 
@@ -52,6 +53,7 @@ class RNNModel(nn.Module):
                  num_mlp_layers=None,
                  mlp_ln=None,
                  context_args=None,
+                 data_type=None,
                  **kwargs
                  ):
         super(RNNModel, self).__init__()
@@ -71,7 +73,8 @@ class RNNModel(nn.Module):
         vocab = Vocab()
         vocab.size = initial_embeddings.shape[0] if initial_embeddings is not None else vocab_size
         vocab.vectors = initial_embeddings
-
+        self.data_type=data_type
+        self.is_bidirectional = True if self.data_type=="mt" else False
         self.embed = Embed(
             word_embedding_dim,
             vocab.size,
@@ -82,12 +85,12 @@ class RNNModel(nn.Module):
             args.size,
             model_dim,
             num_layers=1,
-            batch_first=True)
-
+            batch_first=True,
+            bidirectional=self.is_bidirectional)
         mlp_input_dim = self.get_features_dim()
-
-        self.mlp = MLP(mlp_input_dim, mlp_dim, num_classes,
-                       num_mlp_layers, mlp_ln, classifier_dropout_rate)
+        if self.data_type!="mt":
+            self.mlp = MLP(mlp_input_dim, mlp_dim, num_classes,
+                        num_mlp_layers, mlp_ln, classifier_dropout_rate)
 
         self.encode = context_args.encoder
         self.reshape_input = context_args.reshape_input
@@ -97,7 +100,7 @@ class RNNModel(nn.Module):
         batch_size, seq_len, model_dim = x.data.size()
 
         num_layers = 1
-        bidirectional = False
+        bidirectional=self.is_bidirectional
         bi = 2 if bidirectional else 1
         h0 = Variable(
             to_gpu(
@@ -119,7 +122,8 @@ class RNNModel(nn.Module):
         #   h_0   => (num_layers x num_directions[1,2]) x batch_size x model_dim
         # c_0   => (num_layers x num_directions[1,2]) x batch_size x model_dim
         output, (hn, cn) = self.rnn(x, (h0, c0))
-
+        if self.data_type=="mt":
+            return hn, cn, output
         return hn
 
     def run_embed(self, x):
@@ -144,10 +148,15 @@ class RNNModel(nn.Module):
 
         x = self.unwrap(sentences, transitions)
         emb = self.run_embed(x)
+        if self.data_type=="mt":
+            hn, cn, output=self.run_rnn(emb)
+            example=Example()
+            example.bufs=emb
+            example.tokens=x
+            return example, hn, output, None, None
         hh = torch.squeeze(self.run_rnn(emb))
         h = self.wrap(hh)
         output = self.mlp(self.build_features(h))
-
         return output
 
     def get_features_dim(self):

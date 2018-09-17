@@ -14,12 +14,12 @@ from spinn.util.blocks import bundle, lstm, to_gpu, unbundle
 from spinn.util.blocks import LayerNormalization
 from spinn.util.misc import Example, Vocab
 from spinn.util.catalan import ShiftProbabilities
-
+import sys
 from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
 
 
 def build_model(data_manager, initial_embeddings, vocab_size,
-                num_classes, FLAGS, context_args, composition_args, **kwargs):
+                num_classes, FLAGS, context_args, composition_args, target_vocabulary=None, **kwargs):
     model_cls = BaseModel
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
 
@@ -46,6 +46,10 @@ def build_model(data_manager, initial_embeddings, vocab_size,
         mlp_ln=FLAGS.mlp_ln,
         context_args=context_args,
         composition_args=composition_args,
+        with_attention=FLAGS.with_attention,
+        data_type=FLAGS.data_type,
+        target_vocabulary=target_vocabulary,
+        onmt_module=FLAGS.onmt_file_path
     )
 
 
@@ -347,6 +351,7 @@ class SPINN(nn.Module):
 
         # Transition Loop
         # ===============
+        attended=[[] for i in range(batch_size)]
         for t_step in range(num_transitions):
             transitions = inp_transitions[:, t_step]
             transition_arr = list(transitions)
@@ -453,17 +458,18 @@ class SPINN(nn.Module):
             # Variables' features would simplify this.
 
             # For SHIFT
-            s_stacks, s_tops, s_trackings, s_idxs = [], [], [], []
+            s_stacks, s_tops, s_trackings, s_idxs, r_idxs = [], [], [], [], []
 
             # For REDUCE
             r_stacks, r_lefts, r_rights, r_trackings = [], [], [], []
 
             batch = list(zip(transition_arr, self.bufs, self.stacks, self.tracker.states if hasattr(
                 self, 'tracker') and self.tracker.h is not None else itertools.repeat(None)))
-
+            reduced_idxs=[]
             for batch_idx, (transition, buf, stack,
                             tracking) in enumerate(batch):
                 if transition == T_SHIFT:  # shift
+                    #attended[batch_idx].append(buf[-1][0])
                     self.t_shift(buf, stack, tracking, s_tops, s_trackings)
                     s_idxs.append(batch_idx)
                     s_stacks.append(stack)
@@ -475,17 +481,20 @@ class SPINN(nn.Module):
                         r_lefts,
                         r_rights,
                         r_trackings)
+                    reduced_idxs.append(batch_idx)
+                    attended[batch_idx].append(r_lefts[-1][0].unsqueeze(0))
+                    attended[batch_idx].append(r_rights[-1][0].unsqueeze(0))
+                    #self.attended[batch_idx].append(buf[-1])
                     r_stacks.append(stack)
+                    r_idxs.append(batch_idx)
                 elif transition == T_SKIP:  # skip
                     self.t_skip()
 
             # Action Phase
             # ============
-
             self.shift_phase(s_tops, s_trackings, s_stacks)
             self.reduce_phase(r_lefts, r_rights, r_trackings, r_stacks)
             self.reduce_phase_hook(r_lefts, r_rights, r_trackings, r_stacks)
-
             # Memory Phase
             # ============
 
@@ -544,9 +553,10 @@ class SPINN(nn.Module):
                 "two zeros and the sentence encoding."
             assert all(len(buf) == 1 for buf in self.bufs), \
                 "Stacks should be fully shifted and have 1 zero."
+        [attended[i].append(self.stacks[i][-1][0].unsqueeze(0)) for i in range(batch_size)]
 
         return [stack[-1]
-                for stack in self.stacks], transition_acc, transition_loss
+                for stack in self.stacks], transition_acc, transition_loss, attended
 
 
 class BaseModel(nn.Module):
@@ -578,6 +588,10 @@ class BaseModel(nn.Module):
                  classifier_keep_rate=None,
                  context_args=None,
                  composition_args=None,
+                 with_attention=False,
+                 data_type=None,
+                 target_vocabulary=None,
+                 onmt_module=None,
                  **kwargs
                  ):
         super(BaseModel, self).__init__()
@@ -596,6 +610,7 @@ class BaseModel(nn.Module):
         self.initial_embeddings = initial_embeddings
         self.word_embedding_dim = word_embedding_dim
         self.model_dim = model_dim
+        self.data_type=data_type
 
         classifier_dropout_rate = 1. - classifier_keep_rate
 
@@ -609,9 +624,10 @@ class BaseModel(nn.Module):
 
         # Build classiifer.
         features_dim = self.get_features_dim()
-        self.mlp = MLP(features_dim, mlp_dim, num_classes,
+        if data_type!="mt":
+            self.mlp = MLP(features_dim, mlp_dim, num_classes,
                        num_mlp_layers, mlp_ln, classifier_dropout_rate)
-
+            #self.generator = nn.Sequential(nn.Linear(self.model_dim, len(self.target_vocabulary), nn.LogSoftmax())
         self.embedding_dropout_rate = 1. - embedding_keep_rate
 
         # Create dynamic embedding layer.
@@ -660,10 +676,15 @@ class BaseModel(nn.Module):
             use_internal_parser,
             validate_transitions=True):
         self.spinn.reset_state()
-        h_list, transition_acc, transition_loss = self.spinn(
+        h_list, transition_acc, transition_loss, attended = self.spinn(
             example, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
+        maxlen_attended=max([len(x) for x in attended])
+        attended=[x+(maxlen_attended-len(x))*[to_gpu(Variable(torch.zeros(1, self.model_dim)))] for x in attended]
+        attended=[torch.cat((self.wrap(x)[0], to_gpu(Variable(torch.zeros(len(x), int(self.model_dim/2))))),1 ) for x in attended]
+        attended=torch.cat([x.unsqueeze(1) for x in attended],1)
+        #import pdb;pdb.set_trace()
         h = self.wrap(h_list)
-        return h, transition_acc, transition_loss
+        return h, transition_acc, transition_loss, attended
 
     def forward_hook(self, embeds, batch_size, seq_length):
         pass
@@ -706,14 +727,15 @@ class BaseModel(nn.Module):
 
         example.bufs = buffers
 
-        h, transition_acc, transition_loss = self.run_spinn(
-            example, use_internal_parser, validate_transitions)
+        h, transition_acc, transition_loss , attended= self.run_spinn(
+            example, use_internal_parser, validate_transitions)        
         self.spinn_outp = h
-
         self.transition_acc = transition_acc
         self.transition_loss = transition_loss
-
+        self.attention_h=attended
         # Build features
+        if self.data_type=="mt":
+            return example, self.spinn_outp, attended, transition_loss, transition_acc
         features = self.build_features(h)
 
         output = self.mlp(features)
