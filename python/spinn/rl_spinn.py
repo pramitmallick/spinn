@@ -60,6 +60,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
         rl_value_lstm=FLAGS.rl_value_lstm,
         context_args=context_args,
         composition_args=composition_args,
+        rl_detach=FLAGS.rl_lbtree_detach
     )
 
 
@@ -121,6 +122,7 @@ class BaseModel(_BaseModel):
                  rl_transition_acc_as_reward=None,
                  rl_value_size=None,
                  rl_value_lstm=None,
+                 rl_detach=None,
                  **kwargs):
         super(BaseModel, self).__init__(**kwargs)
 
@@ -137,6 +139,7 @@ class BaseModel(_BaseModel):
         self.spinn.catalan = rl_catalan
         self.spinn.catalan_backprop = rl_catalan_backprop
         self.rl_transition_acc_as_reward = rl_transition_acc_as_reward
+        self.rl_detach = rl_detach
 
         if self.rl_baseline == "value":
             num_outputs = 2 if self.use_sentence_pair else 1
@@ -276,10 +279,15 @@ class BaseModel(_BaseModel):
                 batch_size = len(h_lblist) // 2
                 h_1 = self.spinn.extract_h(self.spinn.wrap_items(h_lblist[:batch_size]))
                 h_2 = self.spinn.extract_h(self.spinn.wrap_items(h_lblist[batch_size:]))
+                if self.rl_detach:
+                    h1.detach_()
+                    h2.detach_()
                 hn_both = torch.cat([h1, h2], 1)
                 self.baseline_outp = self.lb_mlp(hn_both)
             else:
                 hn = self.spinn.extract_h(self.spinn.wrap_items(h_lblist))
+                if self.rl_detach:
+                    hn.detach_()
                 self.baseline_outp = self.lb_mlp(hn)
 
             # Estimate loss with value function.

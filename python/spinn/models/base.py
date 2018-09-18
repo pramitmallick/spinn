@@ -497,6 +497,10 @@ def get_flags():
         "rl_transition_acc_as_reward",
         False,
         "Use the transition accuracy as the reward. For debugging only.")
+    gflags.DEFINE_boolean(
+        "rl_lbtree_detach",
+        False,
+        "Don't backpropogate into the treeLSTM when using it to compute the left branching tree for the rl baseline.")
 
     # MLP settings.
     gflags.DEFINE_integer(
