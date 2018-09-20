@@ -459,6 +459,11 @@ def get_flags():
     gflags.DEFINE_integer("rl_value_lstm", 100, "Size of LSTM used in rl basline \"value\"")
     gflags.DEFINE_enum("rl_reward", "standard", ["standard", "xent"],
                        "Different reward functions to use.")
+    gflags.DEFINE_enum("rl_value_reward", 
+                       "mse", 
+                       ["bce", 
+                       "mse"],
+                       "Different loss function for state value function which estamated reward.")
     gflags.DEFINE_float("rl_weight", 1.0, "Hyperparam for REINFORCE loss.")
     gflags.DEFINE_boolean("rl_whiten", False, "Reduce variance in advantage.")
     gflags.DEFINE_boolean(

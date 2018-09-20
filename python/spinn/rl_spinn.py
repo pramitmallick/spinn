@@ -50,6 +50,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
         rl_epsilon=FLAGS.rl_epsilon,
         rl_baseline=FLAGS.rl_baseline,
         rl_reward=FLAGS.rl_reward,
+        rl_value_reward=FLAGS.rl_value_reward,
         rl_weight=FLAGS.rl_weight,
         rl_whiten=FLAGS.rl_whiten,
         rl_valid=FLAGS.rl_valid,
@@ -113,6 +114,7 @@ class BaseModel(_BaseModel):
                  rl_mu=None,
                  rl_baseline=None,
                  rl_reward=None,
+                 rl_value_reward=None,
                  rl_weight=None,
                  rl_whiten=None,
                  rl_valid=None,
@@ -131,6 +133,7 @@ class BaseModel(_BaseModel):
         self.rl_mu = rl_mu
         self.rl_baseline = rl_baseline
         self.rl_reward = rl_reward
+        self.rl_value_reward = rl_value_reward
         self.rl_weight = rl_weight
         self.rl_whiten = rl_whiten
         self.rl_valid = rl_valid
@@ -247,11 +250,11 @@ class BaseModel(_BaseModel):
         elif self.rl_baseline == "value":
             output = self.baseline_outp
 
-            if self.rl_reward == "standard":
+            if self.rl_value_reward == "bce":
                 baseline = F.sigmoid(output).view(-1)
                 self.value_loss = nn.BCELoss()(baseline, to_gpu(
                     Variable(rewards, volatile=not self.training)))
-            elif self.rl_reward == "xent":
+            elif self.rl_value_reward == "mse":
                 baseline = output.view(-1)
                 self.value_loss = nn.MSELoss()(baseline, to_gpu(
                     Variable(rewards, volatile=not self.training)))
