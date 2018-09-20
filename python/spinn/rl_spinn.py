@@ -223,6 +223,7 @@ class BaseModel(_BaseModel):
             # get the log of the inverse probabilities
             log_inv_prob = torch.log(1 - probs)
             rewards = -1 * torch.gather(log_inv_prob, 1, _target)
+            rewards = rewards.view(-1)
         else:
             raise NotImplementedError
             
@@ -371,6 +372,7 @@ class BaseModel(_BaseModel):
 
             actions = to_gpu(Variable(torch.from_numpy(
                 t_preds[t_mask]).long().view(-1, 1), volatile=not self.training))
+
             log_p_action = torch.gather(t_logprobs, 1, actions)
 
             # NOTE: Not sure I understand why entropy is inside this
@@ -381,6 +383,7 @@ class BaseModel(_BaseModel):
             policy_loss /= log_p_action.size(0)
             policy_loss *= self.rl_weight
         except:
+            import pdb; pdb.set_trace()
             print("No valid parses. Policy loss of -1 passed.")
             policy_loss = to_gpu(Variable(torch.ones(1) * -1))
             
