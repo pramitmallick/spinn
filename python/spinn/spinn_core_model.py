@@ -606,7 +606,8 @@ class BaseModel(nn.Module):
         self.hidden_dim = composition_args.size
         self.wrap_items = composition_args.wrap_items
         self.extract_h = composition_args.extract_h
-
+        if data_type=="mt":
+            self.post_projection= Linear()(context_args.input_dim, int(context_args.input_dim/2), bias=True)
         self.initial_embeddings = initial_embeddings
         self.word_embedding_dim = word_embedding_dim
         self.model_dim = model_dim
@@ -707,6 +708,8 @@ class BaseModel(nn.Module):
         embeds = self.embed(example.tokens)
         embeds = self.reshape_input(embeds, b, l)
         embeds = self.encode(embeds)
+        if self.data_type=="mt":
+            embeds=self.post_projection(embeds)
         embeds = self.reshape_context(embeds, b, l)
         self.forward_hook(embeds, b, l)
         embeds = F.dropout(
@@ -724,9 +727,7 @@ class BaseModel(nn.Module):
             ex = list(ee[ii * l:(ii + 1) * l])
             bb.append(ex)
         buffers = bb[::-1]
-
         example.bufs = buffers
-
         h, transition_acc, transition_loss , attended= self.run_spinn(
             example, use_internal_parser, validate_transitions)        
         self.spinn_outp = h

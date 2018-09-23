@@ -707,8 +707,8 @@ def init_model(
         intermediate_dim = FLAGS.model_dim * FLAGS.model_dim
     else:
         intermediate_dim = FLAGS.model_dim
-    if FLAGS.data_type=="MT":
-        intermediate_dim//=2
+    if FLAGS.data_type=="mt" and FLAGS.encode=="gru":
+        intermediate_dim*=2
     if FLAGS.encode == "projection":
         context_args.reshape_input = lambda x, batch_size, seq_length: x
         context_args.reshape_context = lambda x, batch_size, seq_length: x
