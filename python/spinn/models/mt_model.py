@@ -134,14 +134,16 @@ class NMTModel(nn.Module):
         self.output_embeddings=Embeddings(self.model_dim, len(target_vocabulary)+1, 0)
         if self.model_type=="RNN":
             self.is_bidirectional=True
+            self.down_project=Linear()(self.model_dim*2, self.model_dim, bias=True)
+            self.down_project_context=Linear()(self.model_dim*2, self.model_dim, bias=True)
         else:
             self.spinn=self.encoder.spinn
             self.is_bidirectional=False
         mult_factor=2 if self.is_bidirectional else 1
-        self.decoder=StdRNNDecoder("LSTM", self.is_bidirectional, 1,self.model_dim*mult_factor, embeddings=self.output_embeddings)
+        self.decoder=StdRNNDecoder("LSTM", self.is_bidirectional, 1,self.model_dim, embeddings=self.output_embeddings)
         self.target_vocabulary=target_vocabulary
         self.generator=nn.Sequential(
-                nn.Linear(self.model_dim*mult_factor, len(self.target_vocabulary)+1),
+                nn.Linear(self.model_dim, len(self.target_vocabulary)+1),
                 nn.LogSoftmax()
             )
 
@@ -194,6 +196,9 @@ class NMTModel(nn.Module):
         else:
             src=example.bufs         
             attended=attended.transpose(0,1)
+            padded_enc_output=padded_enc_output.view(1, batch_size, self.model_dim*2)
+            attended=self.down_project(attended)
+            padded_enc_output=self.down_project_context(padded_enc_output)
         enc_state=self.decoder.init_decoder_state(src, attended, (padded_enc_output, padded_enc_output))
         target_forced=False;padded_enc_output=None;enc_output=None; t_mask=None; tmp_trg=None
         if self.training:
