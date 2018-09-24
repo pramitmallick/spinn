@@ -348,7 +348,6 @@ class SPINN(nn.Module):
         num_transitions = inp_transitions.shape[1]
         batch_size = inp_transitions.shape[0]
         invalid_count = np.zeros(batch_size)
-
         # Transition Loop
         # ===============
         attended=[[] for i in range(batch_size)]
@@ -554,7 +553,6 @@ class SPINN(nn.Module):
             assert all(len(buf) == 1 for buf in self.bufs), \
                 "Stacks should be fully shifted and have 1 zero."
         [attended[i].append(self.stacks[i][-1][0].unsqueeze(0)) for i in range(batch_size)]
-
         return [stack[-1]
                 for stack in self.stacks], transition_acc, transition_loss, attended
 
@@ -681,7 +679,8 @@ class BaseModel(nn.Module):
             example, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
         maxlen_attended=max([len(x) for x in attended])
         attended=[x+(maxlen_attended-len(x))*[to_gpu(Variable(torch.zeros(1, self.model_dim)))] for x in attended]
-        attended=[torch.cat((self.wrap(x)[0], to_gpu(Variable(torch.zeros(len(x), int(self.model_dim/2))))),1 ) for x in attended]
+        #attended=[torch.cat((self.wrap(x)[0], to_gpu(Variable(torch.zeros(len(x), int(self.model_dim/2))))),1 ) for x in attended]
+        attended=[torch.cat(x) for x in attended]
         attended=torch.cat([x.unsqueeze(1) for x in attended],1)
 
         h = self.wrap(h_list)
