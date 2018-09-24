@@ -214,16 +214,21 @@ class BaseModel(_BaseModel):
                                   validate_transitions=True)
         return outputs
 
-    def build_reward(self, probs, target, rl_reward="standard"):
+    def build_reward(self, output, target, rl_reward="standard"):
         if rl_reward == "standard":  # Zero One Loss.
+            probs = F.softmax(output, dim=1).data.cpu() # new edit
             y = probs.max(1, keepdim=False)[1]
             rewards = torch.eq(y, target).float()
         elif rl_reward == "xent":  # Cross Entropy Loss.
+            """
             _target = target.long().view(-1, 1)
             # get the log of the inverse probabilities
             log_inv_prob = torch.log(1 - probs)
             rewards = -1 * torch.gather(log_inv_prob, 1, _target)
             rewards = rewards.view(-1)
+            """
+            # new edit ^ >
+            rewards = nn.CrossEntropyLoss(reduce=False)(output, Variable(target)).data.cpu() # volatile?
         else:
             raise NotImplementedError
             
@@ -383,7 +388,6 @@ class BaseModel(_BaseModel):
             policy_loss /= log_p_action.size(0)
             policy_loss *= self.rl_weight
         except:
-            import pdb; pdb.set_trace()
             print("No valid parses. Policy loss of -1 passed.")
             policy_loss = to_gpu(Variable(torch.ones(1) * -1))
             
@@ -393,7 +397,7 @@ class BaseModel(_BaseModel):
         if not self.training:
             return
 
-        probs = F.softmax(output, dim=1).data.cpu()
+        #probs = F.softmax(output, dim=1).data.cpu()
         target = torch.from_numpy(y_batch).long()
 
         # Get Reward.
@@ -405,13 +409,14 @@ class BaseModel(_BaseModel):
             trans_acc = np.sum(correct, axis=0) / correct.shape[0]
             rewards = torch.from_numpy(trans_acc)
         else:
-            rewards = self.build_reward(
-                probs, target, rl_reward=self.rl_reward)
+            #rewards = self.build_reward(
+            #    probs, target, rl_reward=self.rl_reward)
+            # new edit ^ > 
+            rewards = self.build_reward(output, target, rl_reward=self.rl_reward)
 
         # Get Baseline.
         baseline = self.build_baseline(
             rewards, sentences, transitions, y_batch)
-
 
         # Calculate advantage.
         advantage = rewards - baseline
