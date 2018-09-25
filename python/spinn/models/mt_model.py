@@ -183,10 +183,12 @@ class NMTModel(nn.Module):
             trg.append(tmp)
             t_tmask_trg.append(tmp_mask)
         if isinstance(spinn_outp,list):#spinn_outp.shape[-1]!=self.model_dim:
-            actual_dim=spinn_outp[0].shape[-1]
-            enc_output=spinn_outp[0].view(1,batch_size, actual_dim)
-            padded_enc_output=to_gpu(torch.zeros((1, batch_size, self.model_dim)))
-            padded_enc_output[:,:,:actual_dim]=enc_output
+            # actual_dim=spinn_outp[0].shape[-1]
+            # enc_output=spinn_outp[0].view(1,batch_size, actual_dim)
+            # padded_enc_output=to_gpu(torch.zeros((1, batch_size, self.model_dim)))
+            # padded_enc_output[:,:,:actual_dim]=enc_output
+            # padded_enc_output=spinn_outp
+            padded_enc_output=spinn_outp
         else:
             padded_enc_output=spinn_outp
         trg=torch.tensor(np.array(trg)).view((target_maxlen, batch_size,nfeat)).long()

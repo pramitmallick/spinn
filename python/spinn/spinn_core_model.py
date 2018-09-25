@@ -350,11 +350,6 @@ class SPINN(nn.Module):
         # Transition Loop
         # ===============
         attended=[[] for i in range(batch_size)]
-        for i in range(len(attended)):
-            tmp=[]
-            for j in self.init_bufs[i]:
-                tmp.append(j)
-            attended[i]=tmp
         for t_step in range(num_transitions):
             transitions = inp_transitions[:, t_step]
             transition_arr = list(transitions)
@@ -686,7 +681,10 @@ class BaseModel(nn.Module):
         #attended=[torch.cat((self.wrap(x)[0], to_gpu(Variable(torch.zeros(len(x), int(self.model_dim/2))))),1 ) for x in attended]
         attended=[torch.cat(x) for x in attended]
         attended=torch.cat([x.unsqueeze(1) for x in attended],1)
-        h = self.wrap(h_list)
+        if self.data_type=="mt":
+            h = torch.cat(h_list).unsqueeze(0)
+        else:
+            self.wrap(h_list)
         return h, transition_acc, transition_loss, attended
 
     def forward_hook(self, embeds, batch_size, seq_length):
