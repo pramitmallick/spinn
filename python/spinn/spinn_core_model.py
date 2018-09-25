@@ -186,7 +186,7 @@ class SPINN(nn.Module):
                 "All sentences (including cropped) must be the appropriate length."
 
         self.bufs = example.bufs
-
+        self.init_bufs=example.bufs
         # Notes on adding zeros to bufs/stacks.
         # - After the buffer is consumed, we need one zero on the buffer
         #   used as input to the tracker.
@@ -199,7 +199,6 @@ class SPINN(nn.Module):
         # Initialize Buffers. Trim unused tokens.
         self.bufs = [[zeros] + b[-b_n:]
                      for b, b_n in zip(self.bufs, self.n_tokens)]
-
         # Initialize Stacks.
         self.stacks = [[zeros, zeros] for buf in self.bufs]
 
@@ -351,6 +350,11 @@ class SPINN(nn.Module):
         # Transition Loop
         # ===============
         attended=[[] for i in range(batch_size)]
+        for i in range(len(attended)):
+            tmp=[]
+            for j in self.init_bufs[i]:
+                tmp.append(j)
+            attended[i]=tmp
         for t_step in range(num_transitions):
             transitions = inp_transitions[:, t_step]
             transition_arr = list(transitions)
@@ -468,7 +472,7 @@ class SPINN(nn.Module):
             for batch_idx, (transition, buf, stack,
                             tracking) in enumerate(batch):
                 if transition == T_SHIFT:  # shift
-                    #attended[batch_idx].append(buf[-1][0])
+                    #attended[batch_idx].append(buf[-1][0].unsqueeze(0))
                     self.t_shift(buf, stack, tracking, s_tops, s_trackings)
                     s_idxs.append(batch_idx)
                     s_stacks.append(stack)
@@ -682,7 +686,6 @@ class BaseModel(nn.Module):
         #attended=[torch.cat((self.wrap(x)[0], to_gpu(Variable(torch.zeros(len(x), int(self.model_dim/2))))),1 ) for x in attended]
         attended=[torch.cat(x) for x in attended]
         attended=torch.cat([x.unsqueeze(1) for x in attended],1)
-
         h = self.wrap(h_list)
         return h, transition_acc, transition_loss, attended
 
