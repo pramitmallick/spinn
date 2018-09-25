@@ -684,7 +684,7 @@ class BaseModel(nn.Module):
         if self.data_type=="mt":
             h = torch.cat(h_list).unsqueeze(0)
         else:
-            self.wrap(h_list)
+            h = self.wrap(h_list)
         return h, transition_acc, transition_loss, attended
 
     def forward_hook(self, embeds, batch_size, seq_length):
