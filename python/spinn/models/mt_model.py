@@ -156,7 +156,7 @@ class NMTModel(nn.Module):
             use_internal_parser=False,
             validate_transitions=True,
             **kwargs):
-        example, spinn_outp, attended, transition_loss, transitions_acc=self.encoder(sentences, transitions, y_batch, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
+        example, spinn_outp, attended, transition_loss, transitions_acc, memory_lengths=self.encoder(sentences, transitions, y_batch, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
         nfeat=1#5984#self.output_embeddings.embedding_size
         target_maxlen=max([len(x) for x in y_batch])
         maxlen= example.tokens.size()[1]#max([len(x) for x in attended])
@@ -217,7 +217,7 @@ class NMTModel(nn.Module):
                         inp=unk_token
                     else:
                         inp=trg[i-1].unsqueeze(0)
-                    dec_out, dec_state, attn=self.decoder(inp, attended, dec_state, step=i)
+                    dec_out, dec_state, attn=self.decoder(inp, attended, dec_state, memory_lengths=memory_lengths, step=i)
                     output.append(self.generator(dec_out.squeeze(0)).unsqueeze(0))
                 output=torch.cat(output)
         else:#now just predict:

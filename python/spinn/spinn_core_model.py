@@ -677,6 +677,7 @@ class BaseModel(nn.Module):
         h_list, transition_acc, transition_loss, attended = self.spinn(
             example, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
         maxlen_attended=max([len(x) for x in attended])
+        memory_lengths=to_gpu(Variable(torch.Tensor([len(x) for x in attended])))
         attended=[x+(maxlen_attended-len(x))*[to_gpu(Variable(torch.zeros(1, self.model_dim)))] for x in attended]
         #attended=[torch.cat((self.wrap(x)[0], to_gpu(Variable(torch.zeros(len(x), int(self.model_dim/2))))),1 ) for x in attended]
         attended=[torch.cat(x) for x in attended]
@@ -685,7 +686,7 @@ class BaseModel(nn.Module):
             h = torch.cat(h_list).unsqueeze(0)
         else:
             h = self.wrap(h_list)
-        return h, transition_acc, transition_loss, attended
+        return h, transition_acc, transition_loss, attended, memory_lengths
 
     def forward_hook(self, embeds, batch_size, seq_length):
         pass
@@ -728,7 +729,7 @@ class BaseModel(nn.Module):
             bb.append(ex)
         buffers = bb[::-1]
         example.bufs = buffers
-        h, transition_acc, transition_loss , attended= self.run_spinn(
+        h, transition_acc, transition_loss , attended, memory_lengths= self.run_spinn(
             example, use_internal_parser, validate_transitions)        
         self.spinn_outp = h
         self.transition_acc = transition_acc
@@ -736,7 +737,7 @@ class BaseModel(nn.Module):
         self.attention_h=attended
         # Build features
         if self.data_type=="mt":
-            return example, self.spinn_outp, attended, transition_loss, transition_acc
+            return example, self.spinn_outp, attended, transition_loss, transition_acc, memory_lengths
         features = self.build_features(h)
 
         output = self.mlp(features)
