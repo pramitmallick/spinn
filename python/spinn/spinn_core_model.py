@@ -464,6 +464,12 @@ class SPINN(nn.Module):
             batch = list(zip(transition_arr, self.bufs, self.stacks, self.tracker.states if hasattr(
                 self, 'tracker') and self.tracker.h is not None else itertools.repeat(None)))
             reduced_idxs=[]
+
+
+            # Testing attention. Throw away code
+            test_attend = self.bufs
+            #[torch.stack(self.bufs[i],1).squeeze() for i in range(len(self.bufs))]
+
             for batch_idx, (transition, buf, stack,
                             tracking) in enumerate(batch):
                 if transition == T_SHIFT:  # shift
@@ -551,9 +557,12 @@ class SPINN(nn.Module):
                 "two zeros and the sentence encoding."
             assert all(len(buf) == 1 for buf in self.bufs), \
                 "Stacks should be fully shifted and have 1 zero."
+        
         [attended[i].append(self.stacks[i][-1][0].unsqueeze(0)) for i in range(batch_size)]
+
+        # Throw away code, using test_attended.
         return [stack[-1]
-                for stack in self.stacks], transition_acc, transition_loss, attended
+                for stack in self.stacks], transition_acc, transition_loss, test_attend
 
 
 class BaseModel(nn.Module):
@@ -676,16 +685,20 @@ class BaseModel(nn.Module):
         self.spinn.reset_state()
         h_list, transition_acc, transition_loss, attended = self.spinn(
             example, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
-        maxlen_attended=max([len(x) for x in attended])
-        memory_lengths=to_gpu(Variable(torch.Tensor([len(x) for x in attended])))
-        attended=[x+(maxlen_attended-len(x))*[to_gpu(Variable(torch.zeros(1, self.model_dim)))] for x in attended]
+
+        maxlen_attended = max([len(x) for x in attended])
+        memory_lengths = to_gpu(Variable(torch.Tensor([len(x) for x in attended])))
+        attended = [x + (maxlen_attended - len(x)) * [to_gpu(Variable(torch.zeros(1, self.model_dim)))] for x in attended]
+
         #attended=[torch.cat((self.wrap(x)[0], to_gpu(Variable(torch.zeros(len(x), int(self.model_dim/2))))),1 ) for x in attended]
-        attended=[torch.cat(x) for x in attended]
-        attended=torch.cat([x.unsqueeze(1) for x in attended],1)
+        attended = [torch.cat(x) for x in attended]
+        attended = torch.cat([x.unsqueeze(1) for x in attended], 1)
+
         if self.data_type=="mt":
             h = torch.cat(h_list).unsqueeze(0)
         else:
             h = self.wrap(h_list)
+
         return h, transition_acc, transition_loss, attended, memory_lengths
 
     def forward_hook(self, embeds, batch_size, seq_length):
