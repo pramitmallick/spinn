@@ -682,20 +682,22 @@ class BaseModel(nn.Module):
             example, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
 
         ## Not using during attention debugging.
+        attended = embeds
+        import pdb;pdb.set_trace()
         maxlen_attended = max([len(x) for x in attended])
-        memory_lengths = to_gpu(Variable(torch.Tensor([len(x) for x in attended])))
+        memory_lengths = None#to_gpu(Variable(torch.Tensor([len(x) for x in attended])))
         attended = [x + (maxlen_attended - len(x)) * [to_gpu(Variable(torch.zeros(1, self.model_dim)))] for x in attended]
 
         #attended=[torch.cat((self.wrap(x)[0], to_gpu(Variable(torch.zeros(len(x), int(self.model_dim/2))))),1 ) for x in attended]
         attended = [torch.cat(x) for x in attended]
         attended = torch.cat([x.unsqueeze(1) for x in attended], 1)
-
+        import pdb;pdb.set_trace()
         if self.data_type=="mt":
             h = torch.cat(h_list).unsqueeze(0)
         else:
             h = self.wrap(h_list)
         
-        return h, transition_acc, transition_loss, embeds, memory_lengths
+        return h, transition_acc, transition_loss, attended, memory_lengths
 
     def forward_hook(self, embeds, batch_size, seq_length):
         pass
@@ -739,7 +741,7 @@ class BaseModel(nn.Module):
         buffers = bb[::-1]
         example.bufs = buffers
         h, transition_acc, transition_loss , attended, memory_lengths= self.run_spinn(
-            example, embeds, use_internal_parser, validate_transitions)        
+            example, buffers, use_internal_parser, validate_transitions)        
         self.spinn_outp = h
         self.transition_acc = transition_acc
         self.transition_loss = transition_loss
