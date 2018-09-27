@@ -134,14 +134,16 @@ class NMTModel(nn.Module):
         self.output_embeddings=Embeddings(self.model_dim, len(target_vocabulary)+1, 0)
         if self.model_type=="RNN":
             self.is_bidirectional=True
+            self.down_project=Linear()(self.model_dim*2, self.model_dim, bias=True)
+            self.down_project_context=Linear()(self.model_dim*2, self.model_dim, bias=True)
         else:
             self.spinn=self.encoder.spinn
             self.is_bidirectional=False
         mult_factor=2 if self.is_bidirectional else 1
-        self.decoder=StdRNNDecoder("LSTM", self.is_bidirectional, 1,self.model_dim*mult_factor, embeddings=self.output_embeddings)
+        self.decoder=StdRNNDecoder("LSTM", self.is_bidirectional, 1,self.model_dim, embeddings=self.output_embeddings)
         self.target_vocabulary=target_vocabulary
         self.generator=nn.Sequential(
-                nn.Linear(self.model_dim*mult_factor, len(self.target_vocabulary)+1),
+                nn.Linear(self.model_dim, len(self.target_vocabulary)+1),
                 nn.LogSoftmax()
             )
 
@@ -154,7 +156,7 @@ class NMTModel(nn.Module):
             use_internal_parser=False,
             validate_transitions=True,
             **kwargs):
-        example, spinn_outp, attended, transition_loss, transitions_acc=self.encoder(sentences, transitions, y_batch, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
+        example, spinn_outp, attended, transition_loss, transitions_acc, memory_lengths=self.encoder(sentences, transitions, y_batch, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
         nfeat=1#5984#self.output_embeddings.embedding_size
         target_maxlen=max([len(x) for x in y_batch])
         maxlen= example.tokens.size()[1]#max([len(x) for x in attended])
@@ -181,10 +183,12 @@ class NMTModel(nn.Module):
             trg.append(tmp)
             t_tmask_trg.append(tmp_mask)
         if isinstance(spinn_outp,list):#spinn_outp.shape[-1]!=self.model_dim:
-            actual_dim=spinn_outp[0].shape[-1]
-            enc_output=spinn_outp[0].view(1,batch_size, actual_dim)
-            padded_enc_output=to_gpu(torch.zeros((1, batch_size, self.model_dim)))
-            padded_enc_output[:,:,:actual_dim]=enc_output
+            # actual_dim=spinn_outp[0].shape[-1]
+            # enc_output=spinn_outp[0].view(1,batch_size, actual_dim)
+            # padded_enc_output=to_gpu(torch.zeros((1, batch_size, self.model_dim)))
+            # padded_enc_output[:,:,:actual_dim]=enc_output
+            # padded_enc_output=spinn_outp
+            padded_enc_output=spinn_outp
         else:
             padded_enc_output=spinn_outp
         trg=torch.tensor(np.array(trg)).view((target_maxlen, batch_size,nfeat)).long()
@@ -194,6 +198,9 @@ class NMTModel(nn.Module):
         else:
             src=example.bufs         
             attended=attended.transpose(0,1)
+            padded_enc_output=padded_enc_output.view(1, batch_size, self.model_dim*2)
+            attended=self.down_project(attended)
+            padded_enc_output=self.down_project_context(padded_enc_output)
         enc_state=self.decoder.init_decoder_state(src, attended, (padded_enc_output, padded_enc_output))
         target_forced=False;padded_enc_output=None;enc_output=None; t_mask=None; tmp_trg=None
         if self.training:
@@ -210,7 +217,7 @@ class NMTModel(nn.Module):
                         inp=unk_token
                     else:
                         inp=trg[i-1].unsqueeze(0)
-                    dec_out, dec_state, attn=self.decoder(inp, attended, dec_state, step=i)
+                    dec_out, dec_state, attn=self.decoder(inp, attended, dec_state, memory_lengths=memory_lengths, step=i)
                     output.append(self.generator(dec_out.squeeze(0)).unsqueeze(0))
                 output=torch.cat(output)
         else:#now just predict:

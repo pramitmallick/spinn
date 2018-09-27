@@ -186,7 +186,7 @@ class SPINN(nn.Module):
                 "All sentences (including cropped) must be the appropriate length."
 
         self.bufs = example.bufs
-
+        self.init_bufs=example.bufs
         # Notes on adding zeros to bufs/stacks.
         # - After the buffer is consumed, we need one zero on the buffer
         #   used as input to the tracker.
@@ -199,7 +199,6 @@ class SPINN(nn.Module):
         # Initialize Buffers. Trim unused tokens.
         self.bufs = [[zeros] + b[-b_n:]
                      for b, b_n in zip(self.bufs, self.n_tokens)]
-
         # Initialize Stacks.
         self.stacks = [[zeros, zeros] for buf in self.bufs]
 
@@ -348,7 +347,6 @@ class SPINN(nn.Module):
         num_transitions = inp_transitions.shape[1]
         batch_size = inp_transitions.shape[0]
         invalid_count = np.zeros(batch_size)
-
         # Transition Loop
         # ===============
         attended=[[] for i in range(batch_size)]
@@ -469,7 +467,7 @@ class SPINN(nn.Module):
             for batch_idx, (transition, buf, stack,
                             tracking) in enumerate(batch):
                 if transition == T_SHIFT:  # shift
-                    #attended[batch_idx].append(buf[-1][0])
+                    #attended[batch_idx].append(buf[-1][0].unsqueeze(0))
                     self.t_shift(buf, stack, tracking, s_tops, s_trackings)
                     s_idxs.append(batch_idx)
                     s_stacks.append(stack)
@@ -554,7 +552,6 @@ class SPINN(nn.Module):
             assert all(len(buf) == 1 for buf in self.bufs), \
                 "Stacks should be fully shifted and have 1 zero."
         [attended[i].append(self.stacks[i][-1][0].unsqueeze(0)) for i in range(batch_size)]
-
         return [stack[-1]
                 for stack in self.stacks], transition_acc, transition_loss, attended
 
@@ -606,7 +603,8 @@ class BaseModel(nn.Module):
         self.hidden_dim = composition_args.size
         self.wrap_items = composition_args.wrap_items
         self.extract_h = composition_args.extract_h
-
+        if data_type=="mt":
+            self.post_projection= Linear()(context_args.input_dim, int(context_args.input_dim/2), bias=True)
         self.initial_embeddings = initial_embeddings
         self.word_embedding_dim = word_embedding_dim
         self.model_dim = model_dim
@@ -679,12 +677,16 @@ class BaseModel(nn.Module):
         h_list, transition_acc, transition_loss, attended = self.spinn(
             example, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
         maxlen_attended=max([len(x) for x in attended])
+        memory_lengths=to_gpu(Variable(torch.Tensor([len(x) for x in attended])))
         attended=[x+(maxlen_attended-len(x))*[to_gpu(Variable(torch.zeros(1, self.model_dim)))] for x in attended]
-        attended=[torch.cat((self.wrap(x)[0], to_gpu(Variable(torch.zeros(len(x), int(self.model_dim/2))))),1 ) for x in attended]
+        #attended=[torch.cat((self.wrap(x)[0], to_gpu(Variable(torch.zeros(len(x), int(self.model_dim/2))))),1 ) for x in attended]
+        attended=[torch.cat(x) for x in attended]
         attended=torch.cat([x.unsqueeze(1) for x in attended],1)
-
-        h = self.wrap(h_list)
-        return h, transition_acc, transition_loss, attended
+        if self.data_type=="mt":
+            h = torch.cat(h_list).unsqueeze(0)
+        else:
+            h = self.wrap(h_list)
+        return h, transition_acc, transition_loss, attended, memory_lengths
 
     def forward_hook(self, embeds, batch_size, seq_length):
         pass
@@ -707,6 +709,8 @@ class BaseModel(nn.Module):
         embeds = self.embed(example.tokens)
         embeds = self.reshape_input(embeds, b, l)
         embeds = self.encode(embeds)
+        if self.data_type=="mt":
+            embeds=self.post_projection(embeds)
         embeds = self.reshape_context(embeds, b, l)
         self.forward_hook(embeds, b, l)
         embeds = F.dropout(
@@ -724,10 +728,8 @@ class BaseModel(nn.Module):
             ex = list(ee[ii * l:(ii + 1) * l])
             bb.append(ex)
         buffers = bb[::-1]
-
         example.bufs = buffers
-
-        h, transition_acc, transition_loss , attended= self.run_spinn(
+        h, transition_acc, transition_loss , attended, memory_lengths= self.run_spinn(
             example, use_internal_parser, validate_transitions)        
         self.spinn_outp = h
         self.transition_acc = transition_acc
@@ -735,7 +737,7 @@ class BaseModel(nn.Module):
         self.attention_h=attended
         # Build features
         if self.data_type=="mt":
-            return example, self.spinn_outp, attended, transition_loss, transition_acc
+            return example, self.spinn_outp, attended, transition_loss, transition_acc, memory_lengths
         features = self.build_features(h)
 
         output = self.mlp(features)

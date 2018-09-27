@@ -153,7 +153,7 @@ class RNNModel(nn.Module):
             example=Example()
             example.bufs=emb
             example.tokens=x
-            return example, hn, output, None, None
+            return example, hn, output, None, None, None
         hh = torch.squeeze(self.run_rnn(emb))
         h = self.wrap(hh)
         output = self.mlp(self.build_features(h))
