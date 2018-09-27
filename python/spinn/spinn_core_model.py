@@ -683,7 +683,7 @@ class BaseModel(nn.Module):
 
         ## Not using during attention debugging.
         attended = embeds
-        import pdb;pdb.set_trace()
+        #import pdb;pdb.set_trace()
         maxlen_attended = max([len(x) for x in attended])
         memory_lengths = None#to_gpu(Variable(torch.Tensor([len(x) for x in attended])))
         attended = [x + (maxlen_attended - len(x)) * [to_gpu(Variable(torch.zeros(1, self.model_dim)))] for x in attended]
@@ -691,7 +691,7 @@ class BaseModel(nn.Module):
         #attended=[torch.cat((self.wrap(x)[0], to_gpu(Variable(torch.zeros(len(x), int(self.model_dim/2))))),1 ) for x in attended]
         attended = [torch.cat(x) for x in attended]
         attended = torch.cat([x.unsqueeze(1) for x in attended], 1)
-        import pdb;pdb.set_trace()
+        #import pdb;pdb.set_trace()
         if self.data_type=="mt":
             h = torch.cat(h_list).unsqueeze(0)
         else:
