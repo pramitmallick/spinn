@@ -465,11 +465,6 @@ class SPINN(nn.Module):
                 self, 'tracker') and self.tracker.h is not None else itertools.repeat(None)))
             reduced_idxs=[]
 
-
-            # Testing attention. Throw away code
-            test_attend = self.bufs
-            #[torch.stack(self.bufs[i],1).squeeze() for i in range(len(self.bufs))]
-
             for batch_idx, (transition, buf, stack,
                             tracking) in enumerate(batch):
                 if transition == T_SHIFT:  # shift
@@ -560,9 +555,8 @@ class SPINN(nn.Module):
         
         [attended[i].append(self.stacks[i][-1][0].unsqueeze(0)) for i in range(batch_size)]
 
-        # Throw away code, using test_attended.
         return [stack[-1]
-                for stack in self.stacks], transition_acc, transition_loss, test_attend
+                for stack in self.stacks], transition_acc, transition_loss, attended
 
 
 class BaseModel(nn.Module):
@@ -679,13 +673,15 @@ class BaseModel(nn.Module):
 
     def run_spinn(
             self,
-            example,
+            example, 
+            embeds,
             use_internal_parser,
             validate_transitions=True):
         self.spinn.reset_state()
         h_list, transition_acc, transition_loss, attended = self.spinn(
             example, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
 
+        ## Not using during attention debugging.
         maxlen_attended = max([len(x) for x in attended])
         memory_lengths = to_gpu(Variable(torch.Tensor([len(x) for x in attended])))
         attended = [x + (maxlen_attended - len(x)) * [to_gpu(Variable(torch.zeros(1, self.model_dim)))] for x in attended]
@@ -698,8 +694,8 @@ class BaseModel(nn.Module):
             h = torch.cat(h_list).unsqueeze(0)
         else:
             h = self.wrap(h_list)
-
-        return h, transition_acc, transition_loss, attended, memory_lengths
+        
+        return h, transition_acc, transition_loss, embeds, memory_lengths
 
     def forward_hook(self, embeds, batch_size, seq_length):
         pass
@@ -743,7 +739,7 @@ class BaseModel(nn.Module):
         buffers = bb[::-1]
         example.bufs = buffers
         h, transition_acc, transition_loss , attended, memory_lengths= self.run_spinn(
-            example, use_internal_parser, validate_transitions)        
+            example, embeds, use_internal_parser, validate_transitions)        
         self.spinn_outp = h
         self.transition_acc = transition_acc
         self.transition_loss = transition_loss
