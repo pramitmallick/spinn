@@ -453,6 +453,7 @@ def get_flags():
                         "pass",
                         "greedy",
                         "value",
+                        "shared",
                         "lbtree"],
                        "Different configurations to approximate reward function.")
     gflags.DEFINE_integer("rl_value_size", 128, "Size of MLP used in rl baseline \"value\"")
