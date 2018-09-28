@@ -454,7 +454,7 @@ class EncodeGRU(GRU):
 
 class LSTM(nn.Module):
     def __init__(self, inp_dim, model_dim, num_layers=1,
-                 reverse=False, bidirectional=False, dropout=None):
+                 reverse=False, bidirectional=False, dropout=0.0):
         super(LSTM, self).__init__()
         self.model_dim = model_dim
         self.reverse = reverse
@@ -591,6 +591,35 @@ class Lift(nn.Module):
 
     def forward(self, input):
         return F.tanh(self.lift(input))
+
+class EncodeLSTM(LSTM):
+    def __init__(
+            self,
+            inp_dim,
+            model_dim,
+            bidirectional=False,
+            mix=True,
+            *args,
+            **kwargs):
+        if mix and bidirectional:
+            self.mix = True
+            assert model_dim % 4 == 0, "Model dim must be divisible by 4 to use bidirectional GRU encoder."
+            self.half_state_dim = model_dim // 4
+        else:
+            self.mix = False
+        super(
+            EncodeLSTM,
+            self).__init__(
+            inp_dim,
+            model_dim,
+            *args,
+            bidirectional=bidirectional,
+            **kwargs)
+
+    def forward(self, x, h0=None, c0=None):
+        output= super(EncodeLSTM, self).forward(x, h0, c0)
+        return output
+
 
 
 class ReduceTensor(nn.Module):

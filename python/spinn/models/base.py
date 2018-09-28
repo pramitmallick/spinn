@@ -14,7 +14,7 @@ from spinn.data.listops import load_listops_data
 from spinn.data.sst import load_sst_data, load_sst_binary_data
 from spinn.data.nli import load_nli_data
 from spinn.data.mt import load_mt_data
-from spinn.util.blocks import EncodeGRU, IntraAttention, Linear, ReduceTreeGRU, ReduceTreeLSTM, ReduceTensor,  bundle
+from spinn.util.blocks import EncodeGRU, EncodeLSTM, IntraAttention, Linear, ReduceTreeGRU, ReduceTreeLSTM, ReduceTensor,  bundle
 from spinn.util.misc import Args
 from spinn.util.logparse import parse_flags
 
@@ -430,7 +430,8 @@ def get_flags():
                        ["pass",
                         "projection",
                         "gru",
-                        "attn"],
+                        "attn",
+                        "lstm"],
                        "Encode embeddings with sequential context.")
     gflags.DEFINE_boolean("encode_reverse", False, "Encode in reverse order.")
     gflags.DEFINE_boolean(
@@ -708,7 +709,7 @@ def init_model(
         intermediate_dim = FLAGS.model_dim * FLAGS.model_dim
     else:
         intermediate_dim = FLAGS.model_dim
-    if FLAGS.data_type=="mt" and FLAGS.encode=="gru":
+    if FLAGS.data_type=="mt" and (FLAGS.encode=="gru" or FLAGS.encode=="lstm"):
         intermediate_dim*=2
     if FLAGS.encode == "projection":
         context_args.reshape_input = lambda x, batch_size, seq_length: x
@@ -722,6 +723,17 @@ def init_model(
             batch_size * seq_length, -1)
         context_args.input_dim = intermediate_dim
         encoder = EncodeGRU(FLAGS.word_embedding_dim, intermediate_dim,
+                            num_layers=FLAGS.encode_num_layers,
+                            bidirectional=FLAGS.encode_bidirectional,
+                            reverse=FLAGS.encode_reverse,
+                            mix=(FLAGS.model_type != "CBOW"))
+    elif FLAGS.encode == "lstm":
+        context_args.reshape_input = lambda x, batch_size, seq_length: x.view(
+            batch_size, seq_length, -1)
+        context_args.reshape_context = lambda x, batch_size, seq_length: x.view(
+            batch_size * seq_length, -1)
+        context_args.input_dim = intermediate_dim
+        encoder = EncodeLSTM(FLAGS.word_embedding_dim, intermediate_dim,
                             num_layers=FLAGS.encode_num_layers,
                             bidirectional=FLAGS.encode_bidirectional,
                             reverse=FLAGS.encode_reverse,

@@ -194,7 +194,7 @@ class NMTModel(nn.Module):
         trg=torch.tensor(np.array(trg)).view((target_maxlen, batch_size,nfeat)).long()
         trg=to_gpu(Variable(trg, requires_grad=False))
         if self.model_type=="SPINN":
-            src=torch.cat([torch.cat(x[::-1]).unsqueeze(0) for x in example.bufs]).transpose(0,1)  
+            src=torch.cat([torch.cat(x[::-1]).unsqueeze(0) for x in example.bufs]).transpose(0,1)
         else:
             src=example.bufs         
             attended=attended.transpose(0,1)
