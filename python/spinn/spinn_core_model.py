@@ -682,7 +682,7 @@ class BaseModel(nn.Module):
             example, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
 
         ## Not using during attention debugging.
-        attended = embeds
+        #attended = embeds
         #import pdb;pdb.set_trace()
         maxlen_attended = max([len(x) for x in attended])
         memory_lengths = None#to_gpu(Variable(torch.Tensor([len(x) for x in attended])))
