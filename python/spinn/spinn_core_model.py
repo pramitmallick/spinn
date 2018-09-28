@@ -695,6 +695,7 @@ class BaseModel(nn.Module):
         else:
             h = self.wrap(h_list)
         
+        # Using embeds instead of attended for debugging.
         return h, transition_acc, transition_loss, embeds, memory_lengths
 
     def forward_hook(self, embeds, batch_size, seq_length):
@@ -744,15 +745,14 @@ class BaseModel(nn.Module):
         self.transition_acc = transition_acc
         self.transition_loss = transition_loss
         self.attention_h=attended
+
         # Build features
         if self.data_type=="mt":
             return example, self.spinn_outp, attended, transition_loss, transition_acc, memory_lengths
+
         features = self.build_features(h)
-
         output = self.mlp(features)
-
         self.output_hook(output, sentences, transitions, y_batch)
-
 
         return output
 
