@@ -220,15 +220,19 @@ class BaseModel(_BaseModel):
             y = probs.max(1, keepdim=False)[1]
             rewards = torch.eq(y, target).float()
         elif rl_reward == "xent":  # Cross Entropy Loss.
-            """
+
             _target = target.long().view(-1, 1)
+            probs = F.softmax(output, dim=1).data.cpu()
+
             # get the log of the inverse probabilities
             log_inv_prob = torch.log(1 - probs)
             rewards = -1 * torch.gather(log_inv_prob, 1, _target)
             rewards = rewards.view(-1)
+
             """
             # new edit ^ >
             rewards = nn.CrossEntropyLoss(reduce=False)(output, Variable(target)).data.cpu() # volatile?
+            """
         else:
             raise NotImplementedError
             
@@ -240,8 +244,10 @@ class BaseModel(_BaseModel):
             baseline = self.baseline[0]
             self.baseline[0] = self.baseline[0] * \
                 (1 - mu) + rewards.mean() * mu
+
         elif self.rl_baseline == "pass":
             baseline = 0.
+
         elif self.rl_baseline == "greedy":
             # Pass inputs to Greedy Max
             output = self.run_greedy(sentences, transitions)
@@ -253,9 +259,29 @@ class BaseModel(_BaseModel):
                 probs, target, rl_reward=self.rl_reward)
 
             baseline = approx_rewards.view(-1)
+
         elif self.rl_baseline == "value":
             output = self.baseline_outp
+            if self.rl_value_reward == "bce":
+                baseline = F.sigmoid(output).view(-1)
+                self.value_loss = nn.BCELoss()(baseline, to_gpu(
+                    Variable(rewards, volatile=not self.training)))
+            elif self.rl_value_reward == "mse":
+                baseline = output.view(-1)
+                value_loss = nn.MSELoss()(baseline, to_gpu(
+                    Variable(rewards, volatile=not self.training)))
+                self.value_loss = value_loss.mean()
 
+            else:
+                raise NotImplementedError
+                
+            baseline = baseline.data.cpu()
+
+        elif self.rl_baseline == "shared":
+            # Critic shares the actor's nework. 
+            # The two only differ in the final layer.
+            # NEEDS WORK
+            output = m_features
             if self.rl_value_reward == "bce":
                 baseline = F.sigmoid(output).view(-1)
                 self.value_loss = nn.BCELoss()(baseline, to_gpu(
@@ -266,8 +292,9 @@ class BaseModel(_BaseModel):
                     Variable(rewards, volatile=not self.training)))
             else:
                 raise NotImplementedError
-                
+
             baseline = baseline.data.cpu()
+
         elif self.rl_baseline == "lbtree":
             lb_tree = [0, 0, 1]
             while len(lb_tree) < self.spinn.example.transitions.shape[1]:
@@ -387,6 +414,7 @@ class BaseModel(_BaseModel):
             policy_loss = -1. * torch.sum(policy_losses)
             policy_loss /= log_p_action.size(0)
             policy_loss *= self.rl_weight
+            #import pdb; pdb.set_trace()
         except:
             print("No valid parses. Policy loss of -1 passed.")
             policy_loss = to_gpu(Variable(torch.ones(1) * -1))
