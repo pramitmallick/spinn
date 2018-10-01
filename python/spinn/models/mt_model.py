@@ -15,6 +15,7 @@ from spinn.util.blocks import LayerNormalization
 from spinn.util.misc import Example, Vocab
 from spinn.util.catalan import ShiftProbabilities
 import sys
+import pickle, time
 from spinn.spinn_core_model import build_model as spinn_builder
 from spinn.plain_rnn import build_model as rnn_builder
 
@@ -196,7 +197,7 @@ class NMTModel(nn.Module):
         if self.model_type=="SPINN":
             src=torch.cat([torch.cat(x[::-1]).unsqueeze(0) for x in example.bufs]).transpose(0,1)
         else:
-            src=example.bufs         
+            src=example.bufs
             attended=attended.transpose(0,1)
             padded_enc_output=padded_enc_output.view(1, batch_size, self.model_dim*2)
             attended=self.down_project(attended)
@@ -228,12 +229,19 @@ class NMTModel(nn.Module):
             predicted=[]
             #TODO: replace with k-beam search
             #inp= trg[0].unsqueeze(0)
+            debug=False
+            score_matrix=[]
             for i in range(100):
                 dec_out, dec_state, attn = self.decoder(inp, attended, dec_state, step=i)
                 out=self.generator(dec_out.squeeze(0))
                 argmaxed=torch.max(out,1)[1]
                 inp=argmaxed.unsqueeze(1).unsqueeze(0)
                 predicted.append(argmaxed)
+                if debug:
+                    score_matrix.append(attn)
+            if debug:
+                filename="attn__"+str(int(time.time()))
+                pickle.dump(score_matrix, open(filename, "wb"))
             return predicted
         return output, trg, None, torch.tensor(t_tmask_trg)
 
