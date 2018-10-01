@@ -238,7 +238,7 @@ class NMTModel(nn.Module):
                 inp=argmaxed.unsqueeze(1).unsqueeze(0)
                 predicted.append(argmaxed)
                 if debug:
-                    score_matrix.append(attn)
+                    score_matrix.append(attn['std'].cpu().detach().numpy())
             if debug:
                 filename="attn__"+str(int(time.time()))
                 pickle.dump(score_matrix, open(filename, "wb"))
