@@ -56,6 +56,9 @@ def lb_build(N):
       else:
           return [0,0,1]+(N-2)*[0,1]
 
+def rb_build(N):
+    return [0]*(N)+[1]*(N-1)
+
 def balanced_transitions(N):
         """
         Recursively creates a balanced binary tree with N
