@@ -47,6 +47,8 @@ def convert_binary_bracketing(parse, data_type="gt",lowercase=False):
         transitions=lb_build(len(tokens))
     elif(data_type=="bal"):
         transitions=balanced_transitions(len(tokens))
+    elif(data_type=="rb"):
+        transitions=rb_build(len(tokens))
     #print(transitions)
     return tokens, transitions
 
