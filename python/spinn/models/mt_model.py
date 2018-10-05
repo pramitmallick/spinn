@@ -147,6 +147,7 @@ class NMTModel(nn.Module):
                 nn.Linear(self.model_dim, len(self.target_vocabulary)+1),
                 nn.LogSoftmax()
             )
+        self.rl_weight=flags.rl_weight
 
 
     def forward(
@@ -250,17 +251,67 @@ class NMTModel(nn.Module):
     
     def compute_policy_loss(self,output, trg, mask):
         #mask is maxlen*...
-        advantage=self.get_advantage(output, trg, mask)
+        advantage=self.get_reward(output, trg, mask)
+        t_preds = np.concatenate([m['t_preds']
+                                  for m in self.encoder.spinn.memories if 't_preds' in m])
+        t_mask = np.concatenate([m['t_mask']
+                                 for m in self.encoder.spinn.memories if 't_mask' in m])
+        t_valid_mask = np.concatenate(
+            [m['t_valid_mask'] for m in self.encoder.spinn.memories if 't_mask' in m])
+        t_logprobs = torch.cat(
+            [m['t_logprobs'] for m in self.encoder.spinn.memories if 't_logprobs' in m], 0)
         baseline=self.get_baseline()
-        self.policy_loss=-1.0*(advantage-baseline)
+        batch_size = advantage.size(0)
 
-    def get_advantage(self, output, trg, mask):
+        seq_length = t_preds.shape[0] // batch_size 
+        a_index = np.arange(batch_size)
+        a_index = a_index.reshape(1, -1).repeat(seq_length, axis=0).flatten()
+        try:
+            a_index = torch.from_numpy(a_index[t_mask]).long()
+            # RuntimeError: the given numpy array has zero-sized dimensions. Zero-sized dimensions are not supported in PyTorch
+            # --> t_mask is all False. --> t_mask and t_valid_mask is empty set. --> proabbly t_val-d_mask all False
+
+            t_index = to_gpu(Variable(torch.from_numpy(
+                np.arange(t_mask.shape[0])[t_mask])).long())
+
+            self.stats = dict(
+                mean=advantage.mean(),
+                mean_magnitude=advantage.abs().mean(),
+                var=advantage.var(),
+                var_magnitude=advantage.abs().var()
+            )
+            # Expand advantage.
+            advantage = torch.index_select(advantage, 0, a_index)
+            # Filter logits.
+            t_logprobs = torch.index_select(t_logprobs, 0, t_index)
+            actions = to_gpu(Variable(torch.from_numpy(
+                t_preds[t_mask]).long().view(-1, 1), volatile=not self.training))
+
+            log_p_action = torch.gather(t_logprobs, 1, actions)
+
+            # NOTE: Not sure I understand why entropy is inside this
+            # multiplication. Investigate?
+            policy_losses = log_p_action.view(-1) * \
+                to_gpu(Variable(advantage, volatile=log_p_action.volatile))
+            policy_loss = -1. * torch.sum(policy_losses)
+            policy_loss /= log_p_action.size(0)
+            self.policy_loss=policy_loss *self.rl_weight
+        except:
+            print("No valid parses. Policy loss of -1 passed.")
+            self.policy_loss = to_gpu(Variable(torch.ones(1) * -1))
+        return policy_loss
+
+
+    def get_reward(self, output, trg, mask):
         mask=to_gpu(mask)
-        reward=0.0
         criterion = nn.NLLLoss()
+        batch_size=output.shape[1]
+        reward=[0.0]*batch_size
         for i in range(len(mask)):
-            reward+=criterion(output[i,:].index_select(0, mask[i].nonzero().squeeze(1)), trg[i].index_select(0, mask[i].nonzero().squeeze(1)).view(-1))
-        return -1.0*reward
+            for k in range(batch_size):
+                if mask[i][k]==1:
+                    reward[k]+=criterion(output[i,k].unsqueeze(0), trg[i,k])
+        return torch.tensor([-1.0*float(x) for x in reward])
     
     def get_baseline(self):
         return 0.0
