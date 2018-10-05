@@ -50,7 +50,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
         target_vocabulary=target_vocabulary,
         onmt_module=FLAGS.onmt_file_path,
         flags=FLAGS,
-        data_manager=data_manager
+        data_manager=data_manager,
     )
 
 
@@ -91,9 +91,9 @@ class NMTModel(nn.Module):
                  ):
         super(NMTModel, self).__init__()
         self.model_type=flags.model_type
-        if self.model_type=="SPINN":
+        if self.model_type=="SPINN" or self.model_type=="RLSPINN":
             encoder_builder=spinn_builder
-        else:
+        elif self.model_type=="RNN":
             encoder_builder=rnn_builder
         self.encoder=encoder_builder(
             model_dim=model_dim,
@@ -194,7 +194,7 @@ class NMTModel(nn.Module):
             padded_enc_output=spinn_outp
         trg=torch.tensor(np.array(trg)).view((target_maxlen, batch_size,nfeat)).long()
         trg=to_gpu(Variable(trg, requires_grad=False))
-        if self.model_type=="SPINN":
+        if self.model_type=="SPINN" or self.model_type=="RLSPINN":
             src=torch.cat([torch.cat(x[::-1]).unsqueeze(0) for x in example.bufs]).transpose(0,1)
         else:
             src=example.bufs
@@ -221,6 +221,9 @@ class NMTModel(nn.Module):
                     dec_out, dec_state, attn=self.decoder(inp, attended, dec_state, memory_lengths=memory_lengths, step=i)
                     output.append(self.generator(dec_out.squeeze(0)).unsqueeze(0))
                 output=torch.cat(output)
+            if self.model_type=="RLSPINN":
+                self.encoder.transition_loss=None#removing the spinn transition_loss completely
+                self.compute_policy_loss(output, trg, torch.tensor(t_tmask_trg))
         else:#now just predict:
             unk_token=to_gpu(Variable(torch.zeros((1, batch_size, 1)), requires_grad=False)).long()
             inp=unk_token
@@ -244,6 +247,23 @@ class NMTModel(nn.Module):
                 pickle.dump(score_matrix, open(filename, "wb"))
             return predicted
         return output, trg, None, torch.tensor(t_tmask_trg)
+    
+    def compute_policy_loss(self,output, trg, mask):
+        #mask is maxlen*...
+        advantage=self.get_advantage(output, trg, mask)
+        baseline=self.get_baseline()
+        self.policy_loss=-1.0*(advantage-baseline)
+
+    def get_advantage(self, output, trg, mask):
+        mask=to_gpu(mask)
+        reward=0.0
+        criterion = nn.NLLLoss()
+        for i in range(len(mask)):
+            reward+=criterion(output[i,:].index_select(0, mask[i].nonzero().squeeze(1)), trg[i].index_select(0, mask[i].nonzero().squeeze(1)).view(-1))
+        return -1.0*reward
+    
+    def get_baseline(self):
+        return 0.0
 
 
     
