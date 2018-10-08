@@ -223,15 +223,18 @@ class NMTModel(nn.Module):
                     output.append(self.generator(dec_out.squeeze(0)).unsqueeze(0))
                 output=torch.cat(output)
             if self.model_type=="RLSPINN":
-                self.encoder.transition_loss=None#removing the spinn transition_loss completely
+                # removing the spinn transition_loss completely
+                #self.encoder.transition_loss=None 
                 self.compute_policy_loss(output, trg, torch.tensor(t_tmask_trg))
-        else:#now just predict:
+
+        # Now just predict during inference mode.
+        else:
             unk_token=to_gpu(Variable(torch.zeros((1, batch_size, 1)), requires_grad=False)).long()
             inp=unk_token
             maxpossible=100
             dec_state=enc_state
             predicted=[]
-            #TODO: replace with k-beam search
+            # TODO: replace with k-beam search
             #inp= trg[0].unsqueeze(0)
             debug=False
             score_matrix=[]
@@ -250,7 +253,7 @@ class NMTModel(nn.Module):
         return output, trg, None, torch.tensor(t_tmask_trg)
     
     def compute_policy_loss(self,output, trg, mask):
-        #mask is maxlen*...
+        # mask is maxlen*...
         advantage=self.get_reward(output, trg, mask)
         t_preds = np.concatenate([m['t_preds']
                                   for m in self.encoder.spinn.memories if 't_preds' in m])
@@ -268,9 +271,6 @@ class NMTModel(nn.Module):
         a_index = a_index.reshape(1, -1).repeat(seq_length, axis=0).flatten()
         try:
             a_index = torch.from_numpy(a_index[t_mask]).long()
-            # RuntimeError: the given numpy array has zero-sized dimensions. Zero-sized dimensions are not supported in PyTorch
-            # --> t_mask is all False. --> t_mask and t_valid_mask is empty set. --> proabbly t_val-d_mask all False
-
             t_index = to_gpu(Variable(torch.from_numpy(
                 np.arange(t_mask.shape[0])[t_mask])).long())
 
@@ -285,14 +285,14 @@ class NMTModel(nn.Module):
             # Filter logits.
             t_logprobs = torch.index_select(t_logprobs, 0, t_index)
             actions = to_gpu(Variable(torch.from_numpy(
-                t_preds[t_mask]).long().view(-1, 1), volatile=not self.training))
+                t_preds[t_mask]).long().view(-1, 1)))
 
             log_p_action = torch.gather(t_logprobs, 1, actions)
 
             # NOTE: Not sure I understand why entropy is inside this
             # multiplication. Investigate?
             policy_losses = log_p_action.view(-1) * \
-                to_gpu(Variable(advantage, volatile=log_p_action.volatile))
+                to_gpu(Variable(advantage))
             policy_loss = -1. * torch.sum(policy_losses)
             policy_loss /= log_p_action.size(0)
             self.policy_loss=policy_loss *self.rl_weight
@@ -306,7 +306,7 @@ class NMTModel(nn.Module):
         mask=to_gpu(mask)
         criterion = nn.NLLLoss()
         batch_size=output.shape[1]
-        reward=[0.0]*batch_size
+        reward = [0.0]*batch_size
         for i in range(len(mask)):
             for k in range(batch_size):
                 if mask[i][k]==1:
@@ -315,6 +315,3 @@ class NMTModel(nn.Module):
     
     def get_baseline(self):
         return 0.0
-
-
-    

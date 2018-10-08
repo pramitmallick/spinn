@@ -202,7 +202,7 @@ def train_format(log_entry, extra=False, rl=False):
     if log_entry.HasField('value_cost'):
         stats_str += " va {value_cost:.5f}"
     if log_entry.HasField('mt_loss'):
-        stats_str += " mtloss({mt_loss:.5f})"
+        stats_str += " mtloss {mt_loss:.5f}"
 
     # Time Component.
     stats_str += " Time: {time:.5f}"

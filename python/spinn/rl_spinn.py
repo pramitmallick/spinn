@@ -378,9 +378,6 @@ class BaseModel(_BaseModel):
         # Patch to handle no valid generated parses
         try:
             a_index = torch.from_numpy(a_index[t_mask]).long()
-            # RuntimeError: the given numpy array has zero-sized dimensions. Zero-sized dimensions are not supported in PyTorch
-            # --> t_mask is all False. --> t_mask and t_valid_mask is empty set. --> proabbly t_val-d_mask all False
-
             t_index = to_gpu(Variable(torch.from_numpy(
                 np.arange(t_mask.shape[0])[t_mask])).long())
 
