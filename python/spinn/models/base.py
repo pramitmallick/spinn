@@ -449,7 +449,7 @@ def get_flags():
         0.1,
         "Use in exponential moving average baseline.")
     gflags.DEFINE_enum("rl_baseline",
-                       "ema",
+                       "value",
                        ["ema",
                         "pass",
                         "greedy",
@@ -459,7 +459,7 @@ def get_flags():
                        "Different configurations to approximate reward function.")
     gflags.DEFINE_integer("rl_value_size", 128, "Size of MLP used in rl baseline \"value\"")
     gflags.DEFINE_integer("rl_value_lstm", 100, "Size of LSTM used in rl basline \"value\"")
-    gflags.DEFINE_enum("rl_reward", "standard", ["standard", "xent"],
+    gflags.DEFINE_enum("rl_reward", "xent", ["standard", "xent"],
                        "Different reward functions to use.")
     gflags.DEFINE_enum("rl_value_reward", 
                        "mse", 
