@@ -252,9 +252,9 @@ class NMTModel(nn.Module):
             return predicted
         return output, trg, None, torch.tensor(t_tmask_trg)
     
-    def compute_policy_loss(self,output, trg, mask):
+    def compute_policy_loss(self, output, trg, mask):
         # mask is maxlen*...
-        advantage=self.get_reward(output, trg, mask)
+        advantage = self.get_reward(output, trg, mask) - self.get_baseline()
         t_preds = np.concatenate([m['t_preds']
                                   for m in self.encoder.spinn.memories if 't_preds' in m])
         t_mask = np.concatenate([m['t_mask']
@@ -295,7 +295,7 @@ class NMTModel(nn.Module):
                 to_gpu(Variable(advantage))
             policy_loss = -1. * torch.sum(policy_losses)
             policy_loss /= log_p_action.size(0)
-            self.policy_loss=policy_loss *self.rl_weight
+            self.policy_loss = policy_loss * self.rl_weight
         except:
             print("No valid parses. Policy loss of -1 passed.")
             self.policy_loss = to_gpu(Variable(torch.ones(1) * -1))
@@ -303,14 +303,14 @@ class NMTModel(nn.Module):
 
 
     def get_reward(self, output, trg, mask):
-        mask=to_gpu(mask)
+        mask = to_gpu(mask)
         criterion = nn.NLLLoss()
-        batch_size=output.shape[1]
-        reward = [0.0]*batch_size
+        batch_size = output.shape[1]
+        reward = [0.0] * batch_size
         for i in range(len(mask)):
             for k in range(batch_size):
-                if mask[i][k]==1:
-                    reward[k]+=criterion(output[i,k].unsqueeze(0), trg[i,k])
+                if mask[i][k] == 1:
+                    reward[k] += criterion(output[i,k].unsqueeze(0), trg[i,k])
         return torch.tensor([-1.0*float(x) for x in reward])
     
     def get_baseline(self):

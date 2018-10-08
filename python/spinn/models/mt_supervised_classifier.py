@@ -12,7 +12,7 @@ from spinn.util import afs_safe_logger
 from spinn.util.data import SimpleProgressBar
 from spinn.util.blocks import to_gpu
 from spinn.util.misc import Accumulator, EvalReporter
-from spinn.util.logging import stats, train_accumulate, create_log_formatter
+from spinn.util.logging import stats, train_accumulate, train_rl_accumulate, create_log_formatter
 from spinn.util.logging import eval_stats, eval_accumulate, prettyprint_trees
 from spinn.util.loss import auxiliary_loss
 from spinn.util.sparks import sparks, dec_str
@@ -127,9 +127,8 @@ def evaluate(FLAGS, model, eval_set, log_entry,
     reference_file.close()
     predict_file.write("\n".join(full_pred))
     predict_file.close()
-    #print(full_pred)
     bleu_score=os.popen("perl spinn/util/multi-bleu.perl "+ ref_file_name+" < "+pred_file_name).read()
-    #print("BLEU"+bleu_score)
+
     try:
         bleu_score=float(bleu_score)
     except:
@@ -219,25 +218,24 @@ def train_loop(
             validate_transitions=FLAGS.validate_transitions,
             pyramid_temperature_multiplier=pyramid_temperature_multiplier,
             example_lengths=num_transitions_batch)
+        
         criterion = nn.NLLLoss()
-        batch_size=len(y_batch)
-        trg_seq_len=trg.shape[0]
-        # print(output[:,1].argmax(1))
-        # print(trg[:,1])
-        # print(output[:,0].argmax(1))
-        # print(trg[:,0])
-        mt_loss=0.0
-        num_classes=output.shape[-1]
-        mask=to_gpu(mask)
+        batch_size = len(y_batch)
+        trg_seq_len = trg.shape[0]
+        mt_loss = 0.0
+        num_classes = output.shape[-1]
+        mask = to_gpu(mask)
+        
         # #mt_loss=criterion(output.t().contiguous().view(-1, num_classes), Variable(trg.view(-1), volatile=False))
         for i in range(trg_seq_len):
-            mt_loss+=criterion(output[i,:].index_select(0, mask[i].nonzero().squeeze(1)), trg[i].index_select(0, mask[i].nonzero().squeeze(1)).view(-1))
+            mt_loss += criterion(output[i,:].index_select(0, mask[i].nonzero().squeeze(1)), trg[i].index_select(0, mask[i].nonzero().squeeze(1)).view(-1))
         # Optionally calculate transition loss.
-        mt_loss=mt_loss/trg_seq_len
+        mt_loss = mt_loss/trg_seq_len
         model.transition_loss = model.encoder.transition_loss if hasattr(
             model.encoder, 'transition_loss') else None
-        transition_loss=model.transition_loss if hasattr(model, 'transition_loss') else None 
-        model.mt_loss=mt_loss
+        transition_loss = model.transition_loss if hasattr(model, 'transition_loss') else None 
+        model.mt_loss = mt_loss
+        
         # Accumulate Total Loss Variable
         total_loss = 0.0
         total_loss += mt_loss
@@ -245,10 +243,11 @@ def train_loop(
             model.optimize_transition_loss=model.encoder.optimize_transition_loss
             total_loss += transition_loss
         aux_loss = auxiliary_loss(model)
-        total_loss= total_loss + aux_loss
+        total_loss += aux_loss[0]
+        
         # Backward pass.
         total_loss.backward()
-        #[(x,y.grad) for x,y in model.named_parameters()]
+       
         # Hard Gradient Clipping
         nn.utils.clip_grad_norm_([param for name, param in model.named_parameters() if name not in ["embed.embed.weight"]], FLAGS.clipping_max_value)
 
@@ -263,6 +262,10 @@ def train_loop(
         A.add('total_tokens', total_tokens)
         A.add('total_time', total_time)
         A.add('mt_loss', float(mt_loss))
+
+        if FLAGS.model_type == "RLSPINN":
+            train_rl_accumulate(model, A, batch)
+
         if trainer.step % FLAGS.statistics_interval_steps == 0:
             stats(model, trainer, A, log_entry)
             should_log = True
@@ -410,5 +413,11 @@ if __name__ == '__main__':
     FLAGS(sys.argv)
 
     flag_defaults(FLAGS)
+
+    if FLAGS.model_type == "RLSPINN":
+        if not FLAGS.use_internal_parser:
+            raise Exception("When using RLSPINN, must set use_internal_parser to True.")
+        if FLAGS.tracking_lstm_hidden_dim == None:
+            raise Exception("When using RLSPINN, must set an integer value for tracking_lstm_hidden_dim.")
 
     run(only_forward=FLAGS.expanded_eval_only_mode)
