@@ -111,8 +111,7 @@ class Tracker(nn.Module):
             if self.c is None:
                 self.c = to_gpu(Variable(torch.from_numpy(
                     np.zeros((batch_size, self.state_size),
-                             dtype=np.float32)),
-                    volatile=tracker_inp.volatile))
+                             dtype=np.float32))))
 
             # Run tracking lstm.
             self.c, self.h = lstm(self.c, tracker_inp)
@@ -193,8 +192,7 @@ class SPINN(nn.Module):
         # - For the first two steps, the stack would be empty, but we add
         #   zeros so that the tracker still gets input.
         zeros = self.zeros = to_gpu(Variable(torch.from_numpy(
-            np.zeros(self.bufs[0][0].size(), dtype=np.float32)),
-            volatile=self.bufs[0][0].volatile))
+            np.zeros(self.bufs[0][0].size(), dtype=np.float32))))
 
         # Initialize Buffers. Trim unused tokens.
         self.bufs = [[zeros] + b[-b_n:]
@@ -536,7 +534,7 @@ class SPINN(nn.Module):
                         np.arange(
                             t_mask.shape[0])[t_mask])).long())
             select_t_given = to_gpu(Variable(torch.from_numpy(
-                t_given[t_mask]), volatile=not self.training).long())
+                t_given[t_mask])).long())
             select_t_logprobs = torch.index_select(t_logprobs, 0, index)
             transition_loss = nn.NLLLoss()(select_t_logprobs, select_t_given) * \
                 self.transition_weight
@@ -781,8 +779,7 @@ class BaseModel(nn.Module):
         example = Example()
         example.tokens = to_gpu(
             Variable(
-                torch.from_numpy(x),
-                volatile=not self.training))
+                torch.from_numpy(x)))
         example.transitions = t
 
         return example
@@ -807,8 +804,7 @@ class BaseModel(nn.Module):
         example = Example()
         example.tokens = to_gpu(
             Variable(
-                torch.from_numpy(x),
-                volatile=not self.training))
+                torch.from_numpy(x)))
         example.transitions = t
 
         return example

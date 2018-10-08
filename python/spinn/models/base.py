@@ -789,7 +789,7 @@ def init_model(
         class ReduceTanh(nn.Module):
             def forward(self, lefts, rights, tracking=None):
                 batch_size = len(lefts)
-                ret = torch.cat(lefts, 0) + F.tanh(torch.cat(rights, 0))
+                ret = torch.cat(lefts, 0) + torch.tanh(torch.cat(rights, 0))
                 return torch.chunk(ret, batch_size, 0)
         composition = ReduceTanh()
     elif FLAGS.reduce == "treegru":

@@ -56,10 +56,10 @@ def train_rl_accumulate(model, A, batch):
     im = inspect(model)
 
     if im.has_policy:
-        A.add('policy_cost', model.policy_loss.data[0])
+        A.add('policy_cost', model.policy_loss.data.item())
 
     if im.has_value:
-        A.add('value_cost', model.value_loss.data[0])
+        A.add('value_cost', model.value_loss.data.item())
 
     # If statement below is part of the rl_skip_bad_batch patch.
     if hasattr(model, "stats"):
@@ -81,15 +81,19 @@ def stats(model, trainer, A, log_entry):
     time_metric = time_per_token(A.get('total_tokens'), A.get('total_time'))
 
     log_entry.step = trainer.step
-    log_entry.class_accuracy = A.get_avg('class_acc')
-    log_entry.cross_entropy_cost = A.get_avg('xent_cost')  # not actual mean
+
+    if hasattr(model, 'mt_loss'):
+        pass
+    else:
+        log_entry.class_accuracy = A.get_avg('class_acc')
+        log_entry.cross_entropy_cost = A.get_avg('xent_cost')  # not actual mean
     log_entry.learning_rate = trainer.learning_rate
     log_entry.time_per_token_seconds = time_metric
 
     total_cost = log_entry.cross_entropy_cost
     if im.has_transition_loss:
         log_entry.transition_accuracy = avg_trans_acc
-        log_entry.transition_cost = float(model.transition_loss.data[0])
+        log_entry.transition_cost = float(model.transition_loss.data.item())
         if model.optimize_transition_loss:
             total_cost += log_entry.transition_cost
     if im.has_invalid:

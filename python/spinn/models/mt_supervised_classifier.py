@@ -250,7 +250,7 @@ def train_loop(
         total_loss.backward()
         #[(x,y.grad) for x,y in model.named_parameters()]
         # Hard Gradient Clipping
-        nn.utils.clip_grad_norm([param for name, param in model.named_parameters() if name not in ["embed.embed.weight"]], FLAGS.clipping_max_value)
+        nn.utils.clip_grad_norm_([param for name, param in model.named_parameters() if name not in ["embed.embed.weight"]], FLAGS.clipping_max_value)
 
         # Gradient descent step.
         trainer.optimizer_step()

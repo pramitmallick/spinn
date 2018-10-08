@@ -263,7 +263,7 @@ class BaseModel(_BaseModel):
         elif self.rl_baseline == "value":
             output = self.baseline_outp
             if self.rl_value_reward == "bce":
-                baseline = F.sigmoid(output).view(-1)
+                baseline = torch.sigmoid(output).view(-1)
                 self.value_loss = nn.BCELoss()(baseline, to_gpu(
                     Variable(rewards, volatile=not self.training)))
             elif self.rl_value_reward == "mse":
@@ -283,7 +283,7 @@ class BaseModel(_BaseModel):
             # NEEDS WORK
             output = m_features
             if self.rl_value_reward == "bce":
-                baseline = F.sigmoid(output).view(-1)
+                baseline = torch.sigmoid(output).view(-1)
                 self.value_loss = nn.BCELoss()(baseline, to_gpu(
                     Variable(rewards, volatile=not self.training)))
             elif self.rl_value_reward == "mse":
@@ -329,7 +329,7 @@ class BaseModel(_BaseModel):
             # Estimate loss with value function.
             output = self.baseline_outp
             if self.rl_reward == "standard":
-                baseline = F.sigmoid(output).view(-1)
+                baseline = torch.sigmoid(output).view(-1)
                 self.value_loss = nn.BCELoss()(baseline, to_gpu(
                     Variable(rewards, volatile=not self.training)))
             elif self.rl_reward == "xent":
@@ -403,14 +403,14 @@ class BaseModel(_BaseModel):
             t_logprobs = torch.index_select(t_logprobs, 0, t_index)
 
             actions = to_gpu(Variable(torch.from_numpy(
-                t_preds[t_mask]).long().view(-1, 1), volatile=not self.training))
+                t_preds[t_mask]).long().view(-1, 1)))
 
             log_p_action = torch.gather(t_logprobs, 1, actions)
 
             # NOTE: Not sure I understand why entropy is inside this
             # multiplication. Investigate?
             policy_losses = log_p_action.view(-1) * \
-                to_gpu(Variable(advantage, volatile=log_p_action.volatile))
+                to_gpu(Variable(advantage))
             policy_loss = -1. * torch.sum(policy_losses)
             policy_loss /= log_p_action.size(0)
             policy_loss *= self.rl_weight

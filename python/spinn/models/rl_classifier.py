@@ -253,7 +253,7 @@ def train_loop(
         class_acc = pred.eq(target).sum() / float(target.size(0))
 
         # Calculate class loss.
-        xent_loss = nn.CrossEntropyLoss()(output, to_gpu(Variable(target, volatile=False)))
+        xent_loss = nn.CrossEntropyLoss()(output, to_gpu(Variable(target)))
 
         # Optionally calculate transition loss.
         transition_loss = model.transition_loss if hasattr(
@@ -265,13 +265,13 @@ def train_loop(
         if transition_loss is not None and model.optimize_transition_loss:
             total_loss += transition_loss
         aux_loss = auxiliary_loss(model)
-        total_loss += aux_loss
+        total_loss += aux_loss[0]
 
         # Backward pass.
         total_loss.backward()
 
         # Hard Gradient Clipping
-        nn.utils.clip_grad_norm([param for name, param in model.named_parameters() if name not in ["embed.embed.weight"]], FLAGS.clipping_max_value)
+        nn.utils.clip_grad_norm_([param for name, param in model.named_parameters() if name not in ["embed.embed.weight"]], FLAGS.clipping_max_value)
 
         # Gradient descent step.
         trainer.optimizer_step()
@@ -292,7 +292,7 @@ def train_loop(
                               total=FLAGS.statistics_interval_steps)
             progress_bar.finish()
 
-            A.add('xent_cost', xent_loss.data[0])
+            A.add('xent_cost', xent_loss.data.item())
             stats(model, trainer, A, log_entry)
             should_log = True
 

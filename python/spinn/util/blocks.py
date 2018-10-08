@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
-from torch.nn.init import kaiming_normal
+from torch.nn.init import kaiming_normal_
 from torch.nn.parameter import Parameter
 
 from functools import reduce
@@ -144,13 +144,13 @@ def extract_gates(x, n):
 def lstm(c_prev, x):
     a, i, f, o = extract_gates(x, 4)
 
-    a = F.tanh(a)
-    i = F.sigmoid(i)
-    f = F.sigmoid(f)
-    o = F.sigmoid(o)
+    a = torch.tanh(a)
+    i = torch.sigmoid(i)
+    f = torch.sigmoid(f)
+    o = torch.sigmoid(o)
 
     c = a * i + f * c_prev
-    h = o * F.tanh(c)
+    h = o * torch.tanh(c)
 
     return c, h
 
@@ -235,9 +235,9 @@ class ReduceTreeGRU(nn.Module):
             z = Uz + z
             c = Uc + c
 
-        r = F.sigmoid(r)
-        z = F.sigmoid(z)
-        c = F.tanh(c + self.Vl(left * r) + self.Vr(right * r))
+        r = torch.sigmoid(r)
+        z = torch.sigmoid(z)
+        c = torch.tanh(c + self.Vl(left * r) + self.Vr(right * r))
         h = hprev + z * (c - hprev)
 
         return torch.chunk(h, batch_size, 0)
@@ -254,18 +254,18 @@ def treelstm(c_left, c_right, gates):
         [slice_gate(gates, i) for i in range(5)]
 
     # Apply nonlinearities
-    i_gate = F.sigmoid(i_gate)
+    i_gate = torch.sigmoid(i_gate)
     # Lazy alternative to bias initialization, from Choi
-    fl_gate = F.sigmoid(fl_gate + 1.)
+    fl_gate = torch.sigmoid(fl_gate + 1.)
     # Lazy alternative to bias initialization, from Choi
-    fr_gate = F.sigmoid(fr_gate + 1.)
-    o_gate = F.sigmoid(o_gate)
-    cell_inp = F.tanh(cell_inp)
+    fr_gate = torch.sigmoid(fr_gate + 1.)
+    o_gate = torch.sigmoid(o_gate)
+    cell_inp = torch.tanh(cell_inp)
 
     # Compute new cell and hidden value
     i_val = i_gate * cell_inp
     c_t = fl_gate * c_left + fr_gate * c_right + i_val
-    h_t = o_gate * F.tanh(c_t)
+    h_t = o_gate * torch.tanh(c_t)
 
     return (c_t, h_t)
 
@@ -292,8 +292,7 @@ class Embed(nn.Module):
                 tokens.data.cpu().numpy().ravel(), axis=0)
             embeds = to_gpu(
                 Variable(
-                    torch.from_numpy(embeds),
-                    volatile=tokens.volatile))
+                    torch.from_numpy(embeds)))
         return embeds
 
 
@@ -326,8 +325,7 @@ class GRU(nn.Module):
                     torch.zeros(
                         num_layers * bi,
                         batch_size,
-                        model_dim // bi),
-                    volatile=not self.training))
+                        model_dim // bi)))
 
         # Expects (input, h_0):
         #   input => seq_len x batch_size x model_dim
@@ -381,7 +379,7 @@ class IntraAttention(nn.Module):
         bias = bias.unsqueeze(0).expand(batch_size, seq_len, seq_len)
         bias = bias.contiguous()
 
-        bias = to_gpu(Variable(bias, volatile=not self.training))
+        bias = to_gpu(Variable(bias))
 
         return bias
 
@@ -482,16 +480,14 @@ class LSTM(nn.Module):
                     torch.zeros(
                         num_layers * bi,
                         batch_size,
-                        model_dim // bi),
-                    volatile=not self.training))
+                        model_dim // bi)))
         if c0 is None:
             c0 = to_gpu(
                 Variable(
                     torch.zeros(
                         num_layers * bi,
                         batch_size,
-                        model_dim // bi),
-                    volatile=not self.training))
+                        model_dim // bi)))
 
         # Expects (input, h_0, c_0):
         #   input => seq_len x batch_size x model_dim
@@ -590,7 +586,7 @@ class Lift(nn.Module):
         self.lift = Linear()(self.in_features, self.out_features * 2)
 
     def forward(self, input):
-        return F.tanh(self.lift(input))
+        return torch.tanh(self.lift(input))
 
 class EncodeLSTM(LSTM):
     def __init__(
@@ -639,7 +635,7 @@ class ReduceTensor(nn.Module):
         self.reset_parameters()
         
     def reset_parameters(self):
-        kaiming_normal(self.weight)
+        kaiming_normal_(self.weight)
         ZeroInitializer(self.b1)
         ZeroInitializer(self.b2)
 
@@ -655,11 +651,11 @@ class ReduceTensor(nn.Module):
 
         h = left.h.contiguous().view(-1, self.dim, self.dim)
         cell_inp = torch.matmul(self.weight, h)
-        cell_inp = F.tanh(torch.add(cell_inp, self.b1))
+        cell_inp = torch.tanh(torch.add(cell_inp, self.b1))
 
         # Retrieve hidden state from right_in
         h = right.h.contiguous().view(-1, self.dim, self.dim)
-        cell_inp = F.tanh(torch.baddbmm(self.b2, cell_inp, h))
+        cell_inp = torch.tanh(torch.baddbmm(self.b2, cell_inp, h))
         cell_inp = cell_inp.view(-1, hidden_dim)
 
         out = unbundle(treelstmtensor(left.c, right.c, lstm_gates, cell_inp, training=self.training))
@@ -679,10 +675,10 @@ def treelstmtensor(c_left, c_right, gates, cell_inp, use_dropout=False, training
     i_gate, fl_gate, fr_gate, o_gate = [slice_gate(gates, i) for i in range(4)]
 
     # Apply nonlinearities
-    i_gate = F.sigmoid(i_gate)
-    fl_gate = F.sigmoid(fl_gate)
-    fr_gate = F.sigmoid(fr_gate)
-    o_gate = F.sigmoid(o_gate)
+    i_gate = torch.sigmoid(i_gate)
+    fl_gate = torch.sigmoid(fl_gate)
+    fr_gate = torch.sigmoid(fr_gate)
+    o_gate = torch.sigmoid(o_gate)
 
     # Compute new cell and hidden value
     i_val = i_gate * cell_inp
@@ -690,7 +686,7 @@ def treelstmtensor(c_left, c_right, gates, cell_inp, use_dropout=False, training
     if use_dropout:
         i_val = F.dropout(i_val, dropout_rate, training=training)
     c_t = fl_gate * c_left + fr_gate * c_right + i_val
-    h_t = o_gate * F.tanh(c_t)
+    h_t = o_gate * torch.tanh(c_t)
 
     return (c_t, h_t)
 
@@ -753,7 +749,7 @@ def ZeroInitializer(param):
     param.data.set_(torch.from_numpy(init))
 
 
-def Linear(initializer=kaiming_normal,
+def Linear(initializer=kaiming_normal_,
            bias_initializer=ZeroInitializer):
     class CustomLinear(nn.Linear):
         def reset_parameters(self):

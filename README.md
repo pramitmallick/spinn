@@ -5,7 +5,7 @@ This repository was first used for the paper [A Fast Unified Model for Sentence 
 Requirements:
 
 - Python 3.6
-- PyTorch 0.3
+- PyTorch 0.4
 - Additional dependencies listed in python/requirements.txt
 
 Install PyTorch based on instructions online: http://pytorch.org
