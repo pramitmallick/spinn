@@ -25,6 +25,7 @@ import spinn.cbow
 import spinn.choi_pyramid
 import spinn.maillard_pyramid
 import spinn.catalan_pyramid
+import spinn.mt_rl_model
 from spinn.models import mt_model
 import pickle
 import spinn.lms
@@ -158,6 +159,7 @@ def load_data_and_embeddings(
             vocab_filename=FLAGS.log_path+"/_vocab.p"
             pickle.dump(target_vocabulary,open(vocab_filename, "wb"))
             print("Dumped vocabulary")
+
     else:
         if not data_manager.FIXED_VOCABULARY:
             vocabulary = util.BuildVocabulary(
@@ -249,10 +251,14 @@ def get_flags():
         "show_progress_bar",
         True,
         "Turn this off when running experiments on HPC.")
-    gflags.DEFINE_string(
+    gflags.DEFINE_enum(# change to enum
         "transition_mode",
         "gt",
-        "lb/bal/gt: Transition sequence(left branching(lb), balanced(bal), ground truth(gt)")
+        ["gt",
+        "lb",
+        "rb",
+        "bal"],
+        "Transition sequence (left-branching (lb), right-branching (rb), balanced (bal), ground-truth (gt)")
     gflags.DEFINE_string("git_branch_name", "", "Set automatically.")
     gflags.DEFINE_string("slurm_job_id", "", "Set automatically.")
     gflags.DEFINE_integer(
@@ -459,7 +465,7 @@ def get_flags():
                        "Different configurations to approximate reward function.")
     gflags.DEFINE_integer("rl_value_size", 128, "Size of MLP used in rl baseline \"value\"")
     gflags.DEFINE_integer("rl_value_lstm", 100, "Size of LSTM used in rl basline \"value\"")
-    gflags.DEFINE_enum("rl_reward", "xent", ["standard", "xent"],
+    gflags.DEFINE_enum("rl_reward", "xent", ["standard", "xent", "sum", "mean"],
                        "Different reward functions to use.")
     gflags.DEFINE_enum("rl_value_reward", 
                        "mse", 
@@ -683,6 +689,9 @@ def init_model(
 
     logger.Log("Building model.")
     if FLAGS.data_type=="mt":
+        #if FLAGS.model_type == "RLSPINN":
+        #    build_model = spinn.mt_rl_model.build_model
+        #else:
         build_model = mt_model.build_model
     elif FLAGS.model_type == "CBOW":
         build_model = spinn.cbow.build_model
@@ -709,8 +718,8 @@ def init_model(
         intermediate_dim = FLAGS.model_dim * FLAGS.model_dim
     else:
         intermediate_dim = FLAGS.model_dim
-    if FLAGS.data_type=="mt" and (FLAGS.encode=="gru" or FLAGS.encode=="lstm"):
-        intermediate_dim*=2
+    if FLAGS.data_type == "mt" and (FLAGS.encode == "gru" or FLAGS.encode == "lstm"):
+        intermediate_dim *= 2
     if FLAGS.encode == "projection":
         context_args.reshape_input = lambda x, batch_size, seq_length: x
         context_args.reshape_context = lambda x, batch_size, seq_length: x

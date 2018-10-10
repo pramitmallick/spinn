@@ -61,7 +61,8 @@ def build_model(data_manager, initial_embeddings, vocab_size,
         rl_value_lstm=FLAGS.rl_value_lstm,
         context_args=context_args,
         composition_args=composition_args,
-        rl_detach=FLAGS.rl_lbtree_detach
+        rl_detach=FLAGS.rl_lbtree_detach,
+        data_type=FLAGS.data_type
     )
 
 
@@ -105,7 +106,6 @@ class RLSPINN(SPINN):
                 1 - shift_probs).cpu().numpy().astype('int32')
         return transition_logdist, transition_preds
 
-
 class BaseModel(_BaseModel):
 
     optimize_transition_loss = False
@@ -125,8 +125,10 @@ class BaseModel(_BaseModel):
                  rl_value_size=None,
                  rl_value_lstm=None,
                  rl_detach=None,
+                 data_type=None,
                  **kwargs):
-        super(BaseModel, self).__init__(**kwargs)
+        super(BaseModel, self).__init__(data_type=data_type, **kwargs)
+        # ^ To-do: The data_type addiiton doesn't seem kosher, make change. --Nikita
 
         self.kwargs = kwargs
 
@@ -144,12 +146,18 @@ class BaseModel(_BaseModel):
         self.rl_transition_acc_as_reward = rl_transition_acc_as_reward
         self.rl_detach = rl_detach
 
+        self.data_type = data_type
+
         if self.rl_baseline == "value":
             num_outputs = 2 if self.use_sentence_pair else 1
             self.v_dim = self.rl_value_lstm
             self.v_rnn_dim = self.v_dim
             self.v_mlp_dim = self.v_dim * num_outputs
-            self.v_rnn = nn.LSTM(self.input_dim, self.v_rnn_dim,
+            if data_type == "mt":
+                self.v_rnn = nn.LSTM(self.input_dim//2, 
+                            self.v_rnn_dim, num_layers=1, batch_first=True)
+            else:
+                self.v_rnn = nn.LSTM(self.input_dim, self.v_rnn_dim,
                                  num_layers=1, batch_first=True)
             self.v_mlp = MLP(self.v_mlp_dim,
                              mlp_dim=self.rl_value_size, num_classes=1, num_mlp_layers=2,
@@ -220,19 +228,13 @@ class BaseModel(_BaseModel):
             y = probs.max(1, keepdim=False)[1]
             rewards = torch.eq(y, target).float()
         elif rl_reward == "xent":  # Cross Entropy Loss.
-
             _target = target.long().view(-1, 1)
             probs = F.softmax(output, dim=1).data.cpu()
 
             # get the log of the inverse probabilities
             log_inv_prob = torch.log(1 - probs)
             rewards = -1 * torch.gather(log_inv_prob, 1, _target)
-            rewards = rewards.view(-1)
-
-            """
-            # new edit ^ >
-            rewards = nn.CrossEntropyLoss(reduce=False)(output, Variable(target)).data.cpu() # volatile?
-            """
+            rewards = rewards.view(-1) 
         else:
             raise NotImplementedError
             
@@ -411,7 +413,6 @@ class BaseModel(_BaseModel):
             policy_loss = -1. * torch.sum(policy_losses)
             policy_loss /= log_p_action.size(0)
             policy_loss *= self.rl_weight
-            #import pdb; pdb.set_trace()
         except:
             print("No valid parses. Policy loss of -1 passed.")
             policy_loss = to_gpu(Variable(torch.ones(1) * -1))
@@ -422,7 +423,6 @@ class BaseModel(_BaseModel):
         if not self.training:
             return
 
-        #probs = F.softmax(output, dim=1).data.cpu()
         target = torch.from_numpy(y_batch).long()
 
         # Get Reward.

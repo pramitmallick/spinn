@@ -104,7 +104,7 @@ def stats(model, trainer, A, log_entry):
         A.get('adv_mean_magnitude'), dtype=np.float32)
     adv_var = np.array(A.get('adv_var'), dtype=np.float32)
     adv_var_magnitude = np.array(A.get('adv_var_magnitude'), dtype=np.float32)
-    if hasattr(model, 'mt_loss'):
+    if im.has_mt_loss: #hasattr(model, 'mt_loss')
         log_entry.mt_loss=A.get_avg('mt_loss')
         total_cost += log_entry.mt_loss
     if im.has_policy:

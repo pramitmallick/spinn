@@ -22,7 +22,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                 num_classes, FLAGS, context_args, composition_args, target_vocabulary=None, **kwargs):
     model_cls = BaseModel
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
-
+    print("IT IS I")
     return model_cls(
         model_dim=FLAGS.model_dim,
         word_embedding_dim=FLAGS.word_embedding_dim,
@@ -604,12 +604,13 @@ class BaseModel(nn.Module):
         self.hidden_dim = composition_args.size
         self.wrap_items = composition_args.wrap_items
         self.extract_h = composition_args.extract_h
-        if data_type=="mt":
+
+        if data_type == "mt":
             self.post_projection= Linear()(context_args.input_dim, int(context_args.input_dim/2), bias=True)
         self.initial_embeddings = initial_embeddings
         self.word_embedding_dim = word_embedding_dim
         self.model_dim = model_dim
-        self.data_type=data_type
+        self.data_type = data_type
 
         classifier_dropout_rate = 1. - classifier_keep_rate
 
@@ -623,10 +624,11 @@ class BaseModel(nn.Module):
 
         # Build classiifer.
         features_dim = self.get_features_dim()
-        if data_type!="mt":
+        if data_type != "mt":
             self.mlp = MLP(features_dim, mlp_dim, num_classes,
                        num_mlp_layers, mlp_ln, classifier_dropout_rate)
             #self.generator = nn.Sequential(nn.Linear(self.model_dim, len(self.target_vocabulary), nn.LogSoftmax())
+
         self.embedding_dropout_rate = 1. - embedding_keep_rate
 
         # Create dynamic embedding layer.
@@ -680,16 +682,13 @@ class BaseModel(nn.Module):
             example, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
 
         ## Not using during attention debugging.
-        #attended = embeds
-        #import pdb;pdb.set_trace()
         maxlen_attended = max([len(x) for x in attended])
         memory_lengths = None#to_gpu(Variable(torch.Tensor([len(x) for x in attended])))
         attended = [x + (maxlen_attended - len(x)) * [to_gpu(Variable(torch.zeros(1, self.model_dim)))] for x in attended]
 
-        #attended=[torch.cat((self.wrap(x)[0], to_gpu(Variable(torch.zeros(len(x), int(self.model_dim/2))))),1 ) for x in attended]
         attended = [torch.cat(x) for x in attended]
         attended = torch.cat([x.unsqueeze(1) for x in attended], 1)
-        #import pdb;pdb.set_trace()
+
         if self.data_type=="mt":
             h = torch.cat(h_list).unsqueeze(0)
         else:
@@ -721,6 +720,7 @@ class BaseModel(nn.Module):
         if self.data_type=="mt":
             embeds=self.post_projection(embeds)
         embeds = self.reshape_context(embeds, b, l)
+        self.embeds = embeds
         self.forward_hook(embeds, b, l)
         embeds = F.dropout(
             embeds,
@@ -738,15 +738,15 @@ class BaseModel(nn.Module):
             bb.append(ex)
         buffers = bb[::-1]
         example.bufs = buffers
-        h, transition_acc, transition_loss , attended, memory_lengths= self.run_spinn(
+        h, transition_acc, transition_loss , attended, memory_lengths = self.run_spinn(
             example, buffers, use_internal_parser, validate_transitions)        
         self.spinn_outp = h
         self.transition_acc = transition_acc
         self.transition_loss = transition_loss
-        self.attention_h=attended
+        self.attention_h = attended
 
         # Build features
-        if self.data_type=="mt":
+        if self.data_type == "mt":
             return example, self.spinn_outp, attended, transition_loss, transition_acc, memory_lengths
 
         features = self.build_features(h)
