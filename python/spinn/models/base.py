@@ -25,7 +25,6 @@ import spinn.cbow
 import spinn.choi_pyramid
 import spinn.maillard_pyramid
 import spinn.catalan_pyramid
-import spinn.mt_rl_model
 from spinn.models import mt_model
 import pickle
 import spinn.lms
