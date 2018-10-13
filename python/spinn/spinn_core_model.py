@@ -717,7 +717,7 @@ class BaseModel(nn.Module):
         embeds = self.embed(example.tokens)
         embeds = self.reshape_input(embeds, b, l)
         embeds = self.encode(embeds)
-        if self.data_type=="mt":
+        if self.data_type=="mt" and self.encode.__class__.__name__!='CustomLinear':
             embeds=self.post_projection(embeds)
         embeds = self.reshape_context(embeds, b, l)
         self.embeds = embeds
