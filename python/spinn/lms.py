@@ -476,7 +476,7 @@ class BaseModel(nn.Module):
         attended = [torch.cat(self.wrap(x)) for x in attended]
         attended = torch.cat([x.unsqueeze(1) for x in attended], 1)
         if self.data_type=="mt":
-            h = self.wrap(h_list)[0].unsqueeze(0)
+            h = self.wrap(h_list)[0].unsqueeze(0).contiguous()
         else:
             h = self.wrap(h_list)
         return h, transition_acc, transition_loss, attended, memory_lengths

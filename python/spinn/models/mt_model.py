@@ -278,7 +278,7 @@ class NMTModel(nn.Module):
                         inp = start_token
                     else:
                         inp = target[i-1].unsqueeze(0)
-                    dec_out, dec_state, attn = self.decoder(inp.contiguous(), attended, dec_state, memory_lengths=memory_lengths, step=i)
+                    dec_out, dec_state, attn = self.decoder(inp, attended, dec_state, memory_lengths=memory_lengths, step=i)
                     output.append(self.generator(dec_out.squeeze(0)).unsqueeze(0))
                 output = torch.cat(output)
 
@@ -299,7 +299,7 @@ class NMTModel(nn.Module):
             debug = False
             score_matrix = []
             for i in range(100):
-                dec_out, dec_state, attn = self.decoder(inp.contiguous(), attended, dec_state, step=i)
+                dec_out, dec_state, attn = self.decoder(inp, attended, dec_state, step=i)
                 out = self.generator(dec_out.squeeze(0))
                 argmaxed = torch.max(out,1)[1]
                 inp = argmaxed.unsqueeze(1).unsqueeze(0)
