@@ -67,7 +67,6 @@ FIXED_PARAMETERS = {
     "target_language": "zh",
     "model_type":      "SPINN",
     "eval_seq_length":  "1000",
-    "nocomposition_ln": "",
     "early_stopping_steps_to_wait": "100000", 
     #"fine_tune_loaded_embeddings": "", # Broken for MT right now.
     "optimizer_type": "SGD",
@@ -94,7 +93,7 @@ SWEEP_PARAMETERS = {
     "learning_rate": ("lr", EXP, 0.1, 1.0),
     "learning_rate_decay_when_no_progress": ("ld", CHOICE, ['0.1', '0.25', '0.5', '1.0'], None),
     "batch_size": ("bsz", CHOICE, ['12', '24', '32'], None),
-    "nocomposition_ln": ("ln", BOOL, None, None)
+    "composition_ln": ("ln", BOOL, None, None)
 }
 
 
