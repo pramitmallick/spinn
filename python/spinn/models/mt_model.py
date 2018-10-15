@@ -20,6 +20,7 @@ from spinn.util.catalan import ShiftProbabilities
 from spinn.spinn_core_model import build_model as spinn_builder
 from spinn.plain_rnn import build_model as rnn_builder
 from spinn.rl_spinn import build_model as rl_builder
+from spinn.lms import build_model as lms_builder
 
 def build_model(data_manager, initial_embeddings, vocab_size,
                 num_classes, FLAGS, context_args, composition_args, target_vocabulary=None, **kwargs):
@@ -124,10 +125,12 @@ class NMTModel(nn.Module):
             encoder_builder = spinn_builder
         elif self.model_type=="RLSPINN":
             encoder_builder = rl_builder
+        elif self.model_type=="LMS":
+            encoder_builder= lms_builder
         elif self.model_type == "RNN":
             encoder_builder = rnn_builder
 
-        if self.model_type == "SPINN" or "RNN":
+        if self.model_type == "SPINN" or "RNN" or "LMS":
             self.encoder = encoder_builder(
                 model_dim=model_dim,
                 word_embedding_dim=word_embedding_dim,
@@ -167,7 +170,8 @@ class NMTModel(nn.Module):
             context_args=context_args,
             composition_args=composition_args
             )
-
+        if self.model_type=="LMS":
+            self.model_dim**=2
         # To-do: move this head of script. onmt_module path needs to be imported to do so.
         sys.path.append(onmt_module)
         from onmt.decoders.decoder import InputFeedRNNDecoder, StdRNNDecoder, RNNDecoderBase
@@ -184,7 +188,10 @@ class NMTModel(nn.Module):
             self.down_project = Linear()(2*self.model_dim, self.model_dim, bias=True)
             self.down_project_context = Linear()(2*self.model_dim, self.model_dim, bias=True)
         else:
-            self.spinn = self.encoder.spinn
+            if self.model_type=="LMS":
+                self.spinn=self.encoder.lms
+            else:
+                self.spinn = self.encoder.spinn
             self.is_bidirectional = False
         
         self.decoder = StdRNNDecoder("LSTM", self.is_bidirectional, 1,self.model_dim, embeddings=self.output_embeddings)
@@ -243,7 +250,8 @@ class NMTModel(nn.Module):
         target = to_gpu(Variable(target, requires_grad=False))
         
         if self.model_type == "SPINN" or \
-           self.model_type == "RLSPINN":
+           self.model_type == "RLSPINN" or \
+           self.model_type == "LMS":
             src = torch.cat([torch.cat(x[::-1]).unsqueeze(0) for x in example.bufs]).transpose(0,1)
         else:
             src = example.bufs
@@ -251,7 +259,6 @@ class NMTModel(nn.Module):
             padded_enc_output = padded_enc_output.view(1, 2*batch_size, self.model_dim)
             attended = self.down_project(attended)
             padded_enc_output = self.down_project_context(padded_enc_output)
-        
         enc_state = self.decoder.init_decoder_state(src, attended, (padded_enc_output, padded_enc_output))
         
         teacher_force=False; padded_enc_output=None; enc_output=None; t_mask=None; tmp_target=None

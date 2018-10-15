@@ -26,6 +26,7 @@ def build_model(
         FLAGS,
         context_args,
         composition_args,
+        data_type=None,
         **kwargs):
     model_cls = BaseModel
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
@@ -37,6 +38,7 @@ def build_model(
         initial_embeddings=initial_embeddings,
         fine_tune_loaded_embeddings=FLAGS.fine_tune_loaded_embeddings,
         num_classes=num_classes,
+        data_type=data_type,
         embedding_keep_rate=FLAGS.embedding_keep_rate,
         use_sentence_pair=use_sentence_pair,
         use_difference_feature=FLAGS.use_difference_feature,
@@ -238,7 +240,8 @@ class LMS(nn.Module):
         transition_loss = None
         transition_acc = 0.0
         num_transitions = inp_transitions.shape[1]
-
+        batch_size = inp_transitions.shape[0]
+        attended=[[] for i in range(batch_size)]
         # Transition Loop
         # ===============
 
@@ -308,6 +311,8 @@ class LMS(nn.Module):
                         r_lefts,
                         r_rights,
                         r_trackings)
+                    attended[batch_idx].append(r_lefts[-1][0].unsqueeze(0))
+                    attended[batch_idx].append(r_rights[-1][0].unsqueeze(0))
                     r_stacks.append(stack)
                 elif transition == T_SKIP:  # skip
                     self.t_skip()
@@ -342,9 +347,9 @@ class LMS(nn.Module):
                 "two zeros and the sentence encoding."
             assert all(len(buf) == 1 for buf in self.bufs), \
                 "Stacks should be fully shifted and have 1 zero."
-
+        [attended[i].append(self.stacks[i][-1][0].unsqueeze(0)) for i in range(batch_size)]
         return [stack[-1]
-                for stack in self.stacks], transition_acc, transition_loss
+                for stack in self.stacks], transition_acc, transition_loss, attended
 
 
 class BaseModel(nn.Module):
@@ -370,6 +375,7 @@ class BaseModel(nn.Module):
                  classifier_keep_rate=None,
                  context_args=None,
                  composition_args=None,
+                 data_type=None,
                  **kwargs
                  ):
         super(BaseModel, self).__init__()
@@ -385,6 +391,7 @@ class BaseModel(nn.Module):
         self.initial_embeddings = initial_embeddings
         self.word_embedding_dim = word_embedding_dim
         self.model_dim = model_dim
+        self.data_type = data_type
 
         classifier_dropout_rate = 1. - classifier_keep_rate
 
@@ -397,13 +404,16 @@ class BaseModel(nn.Module):
             composition_args, vocab)
 
         # Build classiifer.
-        features_dim = self.get_features_dim()
-        self.mlp = MLP(features_dim, mlp_dim, num_classes,
-                       num_mlp_layers, mlp_ln, classifier_dropout_rate)
+        if self.data_type!="mt":
+            features_dim = self.get_features_dim()
+            
+            self.mlp = MLP(features_dim, mlp_dim, num_classes,
+                        num_mlp_layers, mlp_ln, classifier_dropout_rate)
 
         self.embedding_dropout_rate = 1. - embedding_keep_rate
 
         # Create dynamic embedding layer.
+
         self.embed = Embed(
             word_embedding_dim,
             vocab.size,
@@ -457,10 +467,19 @@ class BaseModel(nn.Module):
             use_internal_parser,
             validate_transitions=True):
         self.lms.reset_state()
-        h_list, transition_acc, transition_loss = self.lms(
+        h_list, transition_acc, transition_loss, attended= self.lms(
             example, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
-        h = self.wrap(h_list)
-        return h, transition_acc, transition_loss
+        ## Not using during attention debugging.
+        maxlen_attended = max([len(x) for x in attended])
+        memory_lengths = None#to_gpu(Variable(torch.Tensor([len(x) for x in attended])))
+        attended = [x + (maxlen_attended - len(x)) * [to_gpu(Variable(torch.zeros(1, self.model_dim*self.model_dim*2)))] for x in attended]
+        attended = [torch.cat(self.wrap(x)) for x in attended]
+        attended = torch.cat([x.unsqueeze(1) for x in attended], 1)
+        if self.data_type=="mt":
+            h = self.wrap(h_list)[0].unsqueeze(0)
+        else:
+            h = self.wrap(h_list)
+        return h, transition_acc, transition_loss, attended, memory_lengths
 
     def forward_hook(self, embeds, batch_size, seq_length):
         pass
@@ -508,14 +527,15 @@ class BaseModel(nn.Module):
 
         example.bufs = buffers
 
-        h, transition_acc, transition_loss = self.run_lms(
+        h, transition_acc, transition_loss, attended, memory_lengths = self.run_lms(
             example, use_internal_parser, validate_transitions)
 
         self.spinn_outp = h
 
         self.transition_acc = transition_acc
         self.transition_loss = transition_loss
-
+        if self.data_type=="mt":
+            return example, self.spinn_outp, attended, transition_loss, transition_acc, memory_lengths
         # Build features
         features = self.build_features(h)
 
