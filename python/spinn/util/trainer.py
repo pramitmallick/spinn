@@ -120,17 +120,23 @@ class ModelTrainer(object):
 
     def new_dev_accuracy(self, acc):
         # Track best dev error
-        if (1 - acc) < 0.99 * self.best_dev_error:
-            self.best_dev_error = 1 - acc
-            self.best_dev_step = self.step
-            if self.ckpt_on_best_dev_error and self.step > self.ckpt_step:
-                if self.mt: 
+        if self.mt:
+            # save best if BLEU score increased by at least 0.2 points
+            if acc > (100. - self.best_dev_error) - 0.2:
+                self.best_dev_error = 100. - acc
+                self.best_dev_step = self.step
+                if self.ckpt_on_best_dev_error and self.step > self.ckpt_step:
                     self.logger.Log(
-                    "Checkpointing with new best dev BLEU score of %f" % acc * 100)
-                else:
+                    "Checkpointing with new best dev BLEU score of %f" % acc)
+                    self.save(self.best_checkpoint_path)
+        else:
+            if (1 - acc) < 0.99 * self.best_dev_error:
+                self.best_dev_error = 1 - acc
+                self.best_dev_step = self.step
+                if self.ckpt_on_best_dev_error and self.step > self.ckpt_step:
                     self.logger.Log(
                     "Checkpointing with new best dev accuracy of %f" % acc)
-                self.save(self.best_checkpoint_path)
+                    self.save(self.best_checkpoint_path)
 
         # Learning rate decay
         if self.learning_rate_decay_when_no_progress != 1.0:

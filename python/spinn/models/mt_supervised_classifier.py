@@ -367,7 +367,6 @@ def train_loop(
                         trainer.step %
                         FLAGS.sample_interval_steps == 0), vocabulary=vocabulary, eval_index=index, target_vocabulary=target_vocabulary)
                 if  index == 0:
-                    acc /= 100
                     trainer.new_dev_accuracy(acc)
             progress_bar.reset()
 
