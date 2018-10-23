@@ -328,7 +328,7 @@ class NMTModel(nn.Module):
                 rewards += -1 * torch.gather(log_inv_prob[i], 1, _target[i].unsqueeze(1)).squeeze()
         else:
             output = output.permute(1,0,2)
-            mask = to_gpu(mask)
+            #mask = to_gpu(mask)
             if rl_reward == "mean":
                 criterion = nn.NLLLoss(reduction="elementwise_mean") 
             elif rl_reward == "sum":
