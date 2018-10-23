@@ -14,8 +14,8 @@ date = now.strftime("%m%d")
 
 
 NYU_NON_PBS = False
-NAME = date + "_enja_RB_var"
-SWEEP_RUNS = 5
+NAME = date + "_enja_RLSPINN"
+SWEEP_RUNS = 8
 
 FLAGS = gflags.FLAGS
 FLAGS = gflags.FLAGS 
@@ -43,7 +43,7 @@ if NYU_CILVR:
     gflags.DEFINE_string("source_eval_path", "/home/nn1119/parsedmtdata/I15tstenja.enp", "")
     gflags.DEFINE_string("target_eval_path", "/home/nn1119/parsedmtdata/I15tstenja.ja ", "")
     gflags.DEFINE_string("embedding_data_path", "/home/nn1119/glove/glove.840B.300d.txt", "")
-    gflags.DEFINE_string("log_path", "/misc/vlgscratch4/BowmanGroup/nikita/mt/en-ja/supspinn", "")
+    gflags.DEFINE_string("log_path", "/misc/vlgscratch4/BowmanGroup/nikita/mt/en-ja/rlspinn", "")
     gflags.DEFINE_string("onmt_path", "/home/nn1119/OpenNMT-py", "")
 else:
     # En-Ja
@@ -53,7 +53,7 @@ else:
     gflags.DEFINE_string("source_eval_path", "/home/nn1119/parsedmtdata/I15tstenja.enp", "")
     gflags.DEFINE_string("target_eval_path", "/home/nn1119/parsedmtdata/I15tstenja.ja ", "")
     gflags.DEFINE_string("embedding_data_path", "/scratch/nn1119/data/glove/glove.840B.300d.txt", "")
-    gflags.DEFINE_string("log_path", "/scratch/nn1119/mt/en-ja/det", "")
+    gflags.DEFINE_string("log_path", "/scratch/nn1119/mt/en-ja/rlspinn", "")
     gflags.DEFINE_string("onmt_path", "/home/nn1119/OpenNMT-py", "")
 
 # Instructions: Configure the variables in this block, then run
@@ -76,7 +76,7 @@ FIXED_PARAMETERS = {
     "onmt_file_path": FLAGS.onmt_path,
     "data_type":     "mt",
     "target_language": "zh",
-    "model_type":      "SPINN",
+    "model_type":      "RLSPINN",
     "eval_seq_length":  "1000",
     "early_stopping_steps_to_wait": "100000", 
     #"fine_tune_loaded_embeddings": "", # Broken for MT right now.
@@ -85,13 +85,14 @@ FIXED_PARAMETERS = {
     "gpu": "0", # Use GPU.,
     "allow_cropping": "",
     "allow_eval_cropping": "",
-    "transition_mode": "rb", # {gt, lb, rb, bal} trees
     "with_attention": "",
     "encode_bidirectional": "",
     "num_mlp_layers": "1",
     "encode": "lstm",
     "write_eval_report": "",
-    "nocomposition_ln": ""
+    "nocomposition_ln": "",
+    "use_internal_parser": "",
+    "transition_weight": "0.0",
 }
 
 # Tunable parameters.
@@ -218,10 +219,10 @@ for run_id in range(SWEEP_RUNS):
 
     flags += " --experiment_name " + name
     if NYU_NON_PBS:
-        print("cd spinn/python; python3 -m spinn.models.mt_supervised_classifier " + flags)
+        print("cd spinn/python; python3 -m spinn.models.mt_rl_classifier " + flags)
     elif NYU_CILVR:
-        print("SPINNMODEL=\"spinn.models.mt_supervised_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh ../scripts/train_spinn_cilvr.sbatch 1")
+        print("SPINNMODEL=\"spinn.models.mt_rl_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh ../scripts/train_spinn_cilvr.sbatch 1")
     else:
-        print("SPINNMODEL=\"spinn.models.mt_supervised_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh ../scripts/train_spinn.sbatch 1")
+        print("SPINNMODEL=\"spinn.models.mt_rl_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh ../scripts/train_spinn.sbatch 1")
     print("")
 

@@ -67,7 +67,7 @@ class ModelTrainer(object):
             if self.mt:
                 self.logger.Log(
                 "Resuming at step: {} with best dev BLEU score: {}".format(
-                    self.step, 100. * (1. - self.best_dev_error)))
+                    self.step, (100. - self.best_dev_error)))
             else:
                 self.logger.Log(
                     "Resuming at step: {} with best dev accuracy: {}".format(
