@@ -50,6 +50,8 @@ class ModelTrainer(object):
 
         self.step = 0
         self.best_dev_error = 1.0
+        if self.mt:
+            self.best_dev_error *= 100.
         self.best_dev_step = 0
 
         self.optimizer_reset(FLAGS.learning_rate)
