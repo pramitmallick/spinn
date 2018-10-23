@@ -209,20 +209,40 @@ class EvalReporter(object):
                    sent2_transitions=None,
                    sent1_trees=None,
                    sent2_trees=None,
-                   cp_metric=False):
-        '''Saves a batch. Transforms the batch from column-centric information
-        (information split by columns) to row-centric (by EvalSentence).'''
+                   cp_metric=False,
+                   mt=False):
+        '''
+        Saves a batch. Transforms the batch from column-centric information
+        (information split by columns) to row-centric (by EvalSentence).
+
+        TO-DO: write a separate MT verison of this function so that we also print predicted ad target traslations.
+        '''
+        
         cp = 0
         cp_max = 0
         mathops = ["[MAX", "[MIN", "[MED", "[SM"]
 
-        b = [preds.view(-1), target.view(-1), example_ids, output]
+        if mt:
+            output = output * len(preds) # Nones
+            target = output # Nones
+            preds = output # Nones
+            b = [np.array(preds), np.array(target), example_ids, np.array(output)]
+        else:
+            b = [preds.view(-1), target.view(-1), example_ids, output]
+
         for i, (pred, truth, eid, output) in enumerate(zip(*b)):
             sent = {}
-            sent['example_id'] = eid
-            sent['prediction'] = pred
-            sent['truth'] = truth
-            sent['output'] = [str(output_val) for output_val in output]
+            if mt:
+                sent['example_id'] = str(eid)
+                sent['prediction'] = pred
+                sent['truth'] = truth
+                sent['output'] = None
+            else:
+                sent['example_id'] = eid
+                sent['prediction'] = pred.data.item()
+                sent['truth'] = truth.data.item()
+                sent['output'] = [str(output_val) for output_val in output]
+
             if sent1_transitions is not None:
                 sent['sent1_transitions'] = sent1_transitions[i].tolist()
             if sent2_transitions is not None:
@@ -240,7 +260,6 @@ class EvalReporter(object):
                 sent['sent2_tree'] = sent2_trees[i]
 
             self.report.append(sent)
-
         if cp_metric:
             return cp, cp_max
 

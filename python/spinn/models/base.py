@@ -97,7 +97,7 @@ def get_data_manager(data_type):
     elif data_type == "relational":
         data_manager = load_relational_data
     elif data_type=="mt":
-        data_manager= load_mt_data
+        data_manager = load_mt_data
     else:
         raise NotImplementedError
 

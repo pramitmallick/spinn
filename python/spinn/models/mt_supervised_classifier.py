@@ -66,19 +66,19 @@ def evaluate(FLAGS, model, eval_set, log_entry,
         pyramid_temperature_multiplier = None
 
     model.eval()
-    curtime=strftime("%Y-%m-%d %H:%M:%S", gmtime())
-    ref_file_name=FLAGS.log_path+"/ref_file"#+curtime
-    pred_file_name=FLAGS.log_path+"/pred_file"#+curtime
-    reference_file=open(ref_file_name, "w")
-    predict_file=open(pred_file_name, "w")
-    full_ref=[]
-    full_pred=[]
+
+    ref_file_name = FLAGS.log_path+"/ref_file"
+    pred_file_name = FLAGS.log_path+"/pred_file"
+    reference_file = open(ref_file_name, "w")
+    predict_file = open(pred_file_name, "w")
+    full_ref = []
+    full_pred = []
     for i, dataset_batch in enumerate(dataset):
         batch = get_batch(dataset_batch)
         eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch, eval_ids = batch
 
         # Run model.
-        output= model(
+        output = model(
             eval_X_batch,
             eval_transitions_batch,
             eval_y_batch,
@@ -86,7 +86,7 @@ def evaluate(FLAGS, model, eval_set, log_entry,
             validate_transitions=FLAGS.validate_transitions,
             pyramid_temperature_multiplier=pyramid_temperature_multiplier,
             example_lengths=eval_num_transitions_batch)
-        #import pdb;pdb.set_trace()
+
         can_sample = FLAGS.model_type in ["ChoiPyramid", "Maillard", "CatalanPyramid"] or (
             FLAGS.model_type == "SPINN" and FLAGS.use_internal_parser)
         if show_sample and can_sample:
@@ -96,23 +96,27 @@ def evaluate(FLAGS, model, eval_set, log_entry,
         if not FLAGS.write_eval_report:
             # Only show one sample, regardless of the number of batches.
             show_sample = False
-        ref_out =[" ".join(map(str,k[:-1]))+" ." for k in eval_y_batch]
-        full_ref+=ref_out
-        predicted=[[] for i in range(len(eval_y_batch))]
-        done=[]
+
+        # Get reference translation
+        ref_out = [" ".join(map(str,k[:-1]))+" ." for k in eval_y_batch]
+        full_ref += ref_out
+
+        # Get predicted translation
+        predicted = [[] for i in range(len(eval_y_batch))]
+        done = []
         for x in output:
-            index=-1
+            index = -1
             for x_0 in x:
-                index+=1
-                val=int(x_0)
-                if val==1:
+                index += 1
+                val = int(x_0)
+                if val == 1:
                     if index in done:
                         continue
                     done.append(index)
                 elif index not in done:
                     predicted[index].append(val)
         pred_out =[" ".join(map(str,k))+" ." for k in predicted]
-        full_pred+=pred_out       
+        full_pred += pred_out
 
         eval_accumulate(model, A, batch)
 
@@ -123,19 +127,44 @@ def evaluate(FLAGS, model, eval_set, log_entry,
         total_tokens += sum([(nt + 1) / \
                             2 for nt in eval_num_transitions_batch.reshape(-1)])
 
+        if FLAGS.write_eval_report:
+            transitions_per_example, _ = model.encoder.spinn.get_transitions_per_example(
+                style="preds" if FLAGS.eval_report_use_preds else "given") if (
+                FLAGS.model_type == "SPINN" and FLAGS.use_internal_parser) else (
+                None, None)
+
+            sent1_transitions = transitions_per_example if transitions_per_example is not None else None
+            sent2_transitions = None
+
+            sent1_trees = tree_strs if tree_strs is not None else None
+            sent2_trees = None
+            reporter.save_batch(
+                full_pred,
+                full_ref,
+                eval_ids,
+                [None],
+                sent1_transitions,
+                sent2_transitions,
+                sent1_trees,
+                sent2_trees,
+                mt=True)
+
+        # Print Progress
+        progress_bar.step(i + 1, total=total_batches)
+    progress_bar.finish()
+
+    if tree_strs is not None:
+        logger.Log('Sample: ' + tree_strs[0])
+
     reference_file.write("\n".join(full_ref))
     reference_file.close()
     predict_file.write("\n".join(full_pred))
     predict_file.close()
-    bleu_score=os.popen("perl spinn/util/multi-bleu.perl "+ ref_file_name+" < "+pred_file_name).read()
-
+    bleu_score = os.popen("perl spinn/util/multi-bleu.perl "+ ref_file_name+" < "+pred_file_name).read()
     try:
-        bleu_score=float(bleu_score)
+        bleu_score = float(bleu_score)
     except:
-        bleu_score=0.0
-    progress_bar.finish()
-    if tree_strs is not None:
-        logger.Log('Sample: ' + tree_strs[0])
+        bleu_score = 0.0
 
     end = time.time()
     total_time = end - start
@@ -143,9 +172,17 @@ def evaluate(FLAGS, model, eval_set, log_entry,
     A.add('class_total', 1)
     A.add('total_tokens', total_tokens)
     A.add('total_time', total_time)
-    #A.add('mt_loss', float(mt_loss))
     eval_stats(model, A, eval_log)
     eval_log.filename = filename
+
+    if FLAGS.write_eval_report:
+        eval_report_path = os.path.join(
+            FLAGS.log_path,
+            FLAGS.experiment_name +
+            ".eval_set_" +
+            str(eval_index) +
+            ".report")
+        reporter.write_report(eval_report_path)
 
     eval_class_acc = eval_log.eval_class_accuracy
     eval_trans_acc = eval_log.eval_transition_accuracy
@@ -226,9 +263,9 @@ def train_loop(
         num_classes = output.shape[-1]
         mask = to_gpu(mask)
         
-        # #mt_loss=criterion(output.t().contiguous().view(-1, num_classes), Variable(trg.view(-1), volatile=False))
         for i in range(trg_seq_len):
             mt_loss += criterion(output[i,:].index_select(0, mask[i].nonzero().squeeze(1)), trg[i].index_select(0, mask[i].nonzero().squeeze(1)).view(-1))
+        
         # Optionally calculate transition loss.
         mt_loss = mt_loss/trg_seq_len
         model.transition_loss = model.encoder.transition_loss if hasattr(
@@ -330,6 +367,7 @@ def train_loop(
                         trainer.step %
                         FLAGS.sample_interval_steps == 0), vocabulary=vocabulary, eval_index=index, target_vocabulary=target_vocabulary)
                 if  index == 0:
+                    acc /= 100
                     trainer.new_dev_accuracy(acc)
             progress_bar.reset()
 

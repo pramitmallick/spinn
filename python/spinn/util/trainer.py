@@ -38,6 +38,7 @@ class ModelTrainer(object):
         self.learning_rate_decay_when_no_progress = FLAGS.learning_rate_decay_when_no_progress
         self.training_data_length = None
         self.eval_interval_steps = FLAGS.eval_interval_steps
+        self.mt = FLAGS.data_type
 
         # GPU support.
         self.gpu = FLAGS.gpu
@@ -61,15 +62,25 @@ class ModelTrainer(object):
         if FLAGS.load_best and os.path.isfile(self.best_checkpoint_path):
             self.logger.Log("Found best checkpoint, restoring.")
             self.load(self.best_checkpoint_path, cpu=FLAGS.gpu < 0)
-            self.logger.Log(
-                "Resuming at step: {} with best dev accuracy: {}".format(
-                    self.step, 1. - self.best_dev_error))
+            if self.mt:
+                self.logger.Log(
+                "Resuming at step: {} with best dev BLEU score: {}".format(
+                    self.step, 100. * (1. - self.best_dev_error)))
+            else:
+                self.logger.Log(
+                    "Resuming at step: {} with best dev accuracy: {}".format(
+                        self.step, 1. - self.best_dev_error))
         elif os.path.isfile(self.standard_checkpoint_path):
             self.logger.Log("Found checkpoint, restoring.")
             self.load(self.standard_checkpoint_path, cpu=FLAGS.gpu < 0)
-            self.logger.Log(
-                "Resuming at step: {} with best dev accuracy: {}".format(
-                    self.step, 1. - self.best_dev_error))
+            if self.mt:
+                self.logger.Log(
+                "Resuming at step: {} with best dev BLEU score: {}".format(
+                    self.step, 100. * (1. - self.best_dev_error)))
+            else:
+                self.logger.Log(
+                    "Resuming at step: {} with best dev accuracy: {}".format(
+                        self.step, 1. - self.best_dev_error))
 
 
     def optimizer_reset(self, learning_rate):
@@ -113,9 +124,12 @@ class ModelTrainer(object):
             self.best_dev_error = 1 - acc
             self.best_dev_step = self.step
             if self.ckpt_on_best_dev_error and self.step > self.ckpt_step:
-                self.logger.Log(
-                    "Checkpointing with new best dev accuracy of %f" %
-                    acc)
+                if self.mt: 
+                    self.logger.Log(
+                    "Checkpointing with new best dev BLEU score of %f" % acc * 100)
+                else:
+                    self.logger.Log(
+                    "Checkpointing with new best dev accuracy of %f" % acc)
                 self.save(self.best_checkpoint_path)
 
         # Learning rate decay
