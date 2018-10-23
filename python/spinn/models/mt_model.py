@@ -452,7 +452,7 @@ class NMTModel(nn.Module):
         except:
             print("No valid parses. Policy loss of -1 passed.")
             policy_loss = to_gpu(Variable(torch.ones(1) * -1))
-            
+        
         return policy_loss
 
     def output_hook(self, output, sentences, transitions, y_batch=None, t_tmask_target=None):
@@ -470,14 +470,12 @@ class NMTModel(nn.Module):
         if self.encoder.rl_transition_acc_as_reward:
             ground = np.transpose(transitions)
             pred = np.array([m['t_preds']
-                             for m in self.spinn.memories if 't_preds' in m])
+                             for m in self.encoder.spinn.memories if 't_preds' in m])
             correct = (ground == pred).astype(np.float32)
             trans_acc = np.sum(correct, axis=0) / correct.shape[0]
             rewards = torch.from_numpy(trans_acc)
         else:
             rewards = self.build_reward(output, target, t_tmask_target, rl_reward=self.encoder.rl_reward)
-
-        #rewards = self.build_reward(output, target, t_tmask_target, rl_reward=self.encoder.rl_reward)
 
         # Get Baseline.
         baseline = self.build_baseline(

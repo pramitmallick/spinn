@@ -122,7 +122,7 @@ class ModelTrainer(object):
         # Track best dev error
         if self.mt:
             # save best if BLEU score increased by at least 0.2 points
-            if acc > (100. - self.best_dev_error) - 0.2:
+            if acc > (100. - self.best_dev_error) + 0.2:
                 self.best_dev_error = 100. - acc
                 self.best_dev_step = self.step
                 if self.ckpt_on_best_dev_error and self.step > self.ckpt_step:
