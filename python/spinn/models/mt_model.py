@@ -328,6 +328,7 @@ class NMTModel(nn.Module):
                 rewards += -1 * torch.gather(log_inv_prob[i], 1, _target[i].unsqueeze(1)).squeeze()
         else:
             output = output.permute(1,0,2)
+            target = to_gpu(Variable(target))
             if rl_reward == "mean":
                 criterion = nn.NLLLoss(reduction="elementwise_mean") 
             elif rl_reward == "sum":
@@ -474,7 +475,7 @@ class NMTModel(nn.Module):
             trans_acc = np.sum(correct, axis=0) / correct.shape[0]
             rewards = torch.from_numpy(trans_acc)
         else:
-            rewards = self.build_reward(output, to_gpu(Variable(target)), t_tmask_target, rl_reward=self.encoder.rl_reward)
+            rewards = self.build_reward(output, target, t_tmask_target, rl_reward=self.encoder.rl_reward)
 
         # Get Baseline.
         baseline = self.build_baseline(
