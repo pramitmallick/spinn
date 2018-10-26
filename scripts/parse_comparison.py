@@ -429,6 +429,14 @@ def read_sst_report(path):
             report[loaded_example['example_id'] + "_1"] = unpad(loaded_example['sent1_tree'])
     return report
 
+def read_mt_report(path):
+    report = {}
+    with codecs.open(path, encoding='utf-8') as f:
+        for line in f:
+            loaded_example = json.loads(line)
+            report[loaded_example['example_id'] + "_1"] = unpad(loaded_example['sent1_tree'])
+    return report
+
 def read_listops_report(path):
     report = {}
     correct = 0
@@ -553,7 +561,11 @@ def run():
                 example["tokens"] = tokens
                 example["transitions"] = transitions
                 example["example_id"] = str(example_id)
-                gt[example["example_id"]] = example["sentence"]         
+                gt[example["example_id"]] = example["sentence"]   
+            elif FLAGS.data_type=="mt":
+                line=line.strip()
+                gt[str(example_id)+"_1"] = line
+
 
     lb = to_lb(gt)
     rb = to_rb(gt)
@@ -614,6 +626,8 @@ def run():
                 reports.append(read_sst_report(path))
             elif FLAGS.data_type=="listops":
                 reports.append(read_listops_report(path))
+            elif FLAGS.data_type=="mt":
+                reports.append(read_mt_report(path))
         if FLAGS.main_report_path_template != "_":
             ptb_report_paths = glob.glob(FLAGS.ptb_report_path_template)
             for path in ptb_report_paths:
@@ -678,7 +692,7 @@ if __name__ == '__main__':
     gflags.DEFINE_boolean("use_balanced_parses", False, "Replace all report trees with roughly-balanced binary trees. Report path template flags are not used when this is set.")
     gflags.DEFINE_boolean("first_two", False, "Show 'first two' and 'last two' metrics.")
     gflags.DEFINE_boolean("neg_pair", False, "Show 'neg_pair' metric.")
-    gflags.DEFINE_enum("data_type", "nli", ["nli", "sst", "listops"], "Data Type")
+    gflags.DEFINE_enum("data_type", "nli", ["nli", "sst", "listops", "mt"], "Data Type")
     gflags.DEFINE_integer("print_latex", 0, "Print this many trees in LaTeX format for each report.")
 
     FLAGS(sys.argv)
