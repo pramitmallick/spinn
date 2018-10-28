@@ -26,7 +26,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 
-
+import spinn.util.parse_comparison as parse_comparison
 from spinn.models.base import get_data_manager, get_flags, get_batch
 from spinn.models.base import flag_defaults, init_model, log_path
 from spinn.models.base import load_data_and_embeddings
@@ -172,6 +172,8 @@ def evaluate(FLAGS, model, eval_set, log_entry,
             str(eval_index) +
             ".report")
         reporter.write_report(eval_report_path)
+        stats=parse_comparison.run_main(data_type="mt",main_report_path_template=FLAGS.log_path+"/"+FLAGS.experiment_name+".eval_set_0.report", main_data_path=FLAGS.source_eval_path)
+        logger.Log(stats)
 
     eval_class_acc = eval_log.eval_class_accuracy
     eval_trans_acc = eval_log.eval_transition_accuracy
