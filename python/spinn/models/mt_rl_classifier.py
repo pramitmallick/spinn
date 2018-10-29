@@ -56,8 +56,8 @@ def evaluate(FLAGS, model, eval_set, log_entry,
     start = time.time()
 
     model.eval()
-    ref_file_name = FLAGS.log_path+"/ref_file"
-    pred_file_name = FLAGS.log_path+"/pred_file"
+    ref_file_name = FLAGS.log_path + "/ref_file"
+    pred_file_name = FLAGS.log_path + "/pred_file"
     reference_file = open(ref_file_name, "w")
     predict_file = open(pred_file_name, "w")
     full_ref = []
@@ -81,6 +81,7 @@ def evaluate(FLAGS, model, eval_set, log_entry,
             tmp_samples = model.encoder.get_samples(
                 eval_X_batch, vocabulary, only_one=not FLAGS.write_eval_report)
             tree_strs = prettyprint_trees(tmp_samples)
+
         if not FLAGS.write_eval_report:
             # Only show one sample, regardless of the number of batches.
             show_sample = False
@@ -148,12 +149,12 @@ def evaluate(FLAGS, model, eval_set, log_entry,
     reference_file.close()
     predict_file.write("\n".join(full_pred))
     predict_file.close()
+    
     bleu_score = os.popen("perl spinn/util/multi-bleu.perl "+ ref_file_name+" < "+pred_file_name).read()
     try:
         bleu_score = float(bleu_score)
     except:
         bleu_score = 0.0
-    
 
     end = time.time()
     total_time = end - start

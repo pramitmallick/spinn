@@ -67,8 +67,8 @@ def evaluate(FLAGS, model, eval_set, log_entry,
 
     model.eval()
 
-    ref_file_name = FLAGS.log_path+"/ref_file"
-    pred_file_name = FLAGS.log_path+"/pred_file"
+    ref_file_name = FLAGS.log_path + "/ref_file"
+    pred_file_name = FLAGS.log_path + "/pred_file"
     reference_file = open(ref_file_name, "w")
     predict_file = open(pred_file_name, "w")
     full_ref = []
