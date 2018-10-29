@@ -173,8 +173,15 @@ def evaluate(FLAGS, model, eval_set, log_entry,
             str(eval_index) +
             ".report")
         reporter.write_report(eval_report_path)
-        stats=parse_comparison.run_main(data_type="mt",main_report_path_template=FLAGS.log_path+"/"+FLAGS.experiment_name+".eval_set_0.report", main_data_path=FLAGS.source_eval_path)
-        logger.Log(stats)
+        stats = parse_comparison.run_main(data_type="mt",main_report_path_template=FLAGS.log_path+"/"+FLAGS.experiment_name+".eval_set_0.report", main_data_path=FLAGS.source_eval_path)
+        # To-do: include the following into lgog-formatter so it's reported in standard format.
+        if tree_strs is not None:
+            logger.Log(
+                'F1 w/ GT: ' + str(stats['gt']) + '\n' +\
+                'F1 w/ LB: ' + str(stats['lb']) + '\n' +\
+                'F1 w/ RB: ' + str(stats['rb']) + '\n' +\
+                'Avg. tree depth: ' + str(stats['depth'])
+                )
 
     eval_class_acc = eval_log.eval_class_accuracy
     eval_trans_acc = eval_log.eval_transition_accuracy
