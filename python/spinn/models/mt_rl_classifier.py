@@ -213,12 +213,12 @@ def train_loop(
     rl_only=False
     log_entry = pb.SpinnEntry()
     for _ in range(trainer.step, FLAGS.training_steps):
-        if FLAGS.rl_alternate and trainer_step%1000==0 and trainer_step>0:
+        if FLAGS.rl_alternate and trainer.step%1000==0 and trainer.step>0:
             rl_only = not rl_only
             if rl_only:
                 logger.Log('Switching training mode: RL only.')
             else:
-                logger.Log('Switching training mode: Both RL and MT.')
+                logger.Log('Switching training mode: MT only.')
         if (trainer.step - trainer.best_dev_step) > FLAGS.early_stopping_steps_to_wait:
             logger.Log('No improvement after ' +
                        str(FLAGS.early_stopping_steps_to_wait) +
@@ -282,7 +282,9 @@ def train_loop(
             
             for i in range(trg_seq_len):
                 mt_loss += criterion(output[i,:].index_select(0, mask[i].nonzero().squeeze(1)), trg[i].index_select(0, mask[i].nonzero().squeeze(1)).view(-1))
-        
+        elif FLAGS.rl_alternate:
+            model.policy_loss=0.0
+            model.value_loss=0.0
         # Optionally calculate transition loss.
         mt_loss = mt_loss/trg_seq_len
         model.transition_loss = model.encoder.transition_loss if hasattr(
