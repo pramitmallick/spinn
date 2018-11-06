@@ -694,7 +694,7 @@ class BaseModel(nn.Module):
         else:
             h = self.wrap(h_list)
 
-        return h, transition_acc, transition_loss, attended, memory_lengths
+        return h, h_list, transition_acc, transition_loss, attended, memory_lengths
 
     def forward_hook(self, embeds, batch_size, seq_length):
         pass
@@ -721,7 +721,7 @@ class BaseModel(nn.Module):
             embeds=self.post_projection(embeds)
         embeds = self.reshape_context(embeds, b, l)
         self.embeds = embeds
-        self.forward_hook(embeds, b, l)
+        #self.forward_hook(embeds, b, l)
         embeds = F.dropout(
             embeds,
             self.embedding_dropout_rate,
@@ -738,12 +738,14 @@ class BaseModel(nn.Module):
             bb.append(ex)
         buffers = bb[::-1]
         example.bufs = buffers
-        h, transition_acc, transition_loss , attended, memory_lengths = self.run_spinn(
+        h, h_list, transition_acc, transition_loss , attended, memory_lengths = self.run_spinn(
             example, buffers, use_internal_parser, validate_transitions)        
         self.spinn_outp = h
         self.transition_acc = transition_acc
         self.transition_loss = transition_loss
         self.attention_h = attended
+
+        self.forward_hook(embeds, b, l, h)
 
         # Build features
         if self.data_type == "mt":
@@ -751,6 +753,7 @@ class BaseModel(nn.Module):
 
         features = self.build_features(h)
         output = self.mlp(features)
+
         self.output_hook(output, sentences, transitions, y_batch)
 
         return output

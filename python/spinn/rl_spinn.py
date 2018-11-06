@@ -162,7 +162,11 @@ class BaseModel(_BaseModel):
             self.v_mlp = MLP(self.v_mlp_dim,
                              mlp_dim=self.rl_value_size, num_classes=1, num_mlp_layers=2,
                              mlp_ln=True, classifier_dropout_rate=0.1)
-        if self.rl_baseline == "lbtree":
+        elif self.rl_baseline == "shared":
+            self.v_mlp = MLP(self.input_dim//2, 
+                             mlp_dim=self.rl_value_size, num_classes=1, num_mlp_layers=2,
+                             mlp_ln=True, classifier_dropout_rate=0.1)
+        elif self.rl_baseline == "lbtree":
             num_outputs = 2 if self.use_sentence_pair else 1
             # To-do: make new flag to replace rl_value_size
             self.lb_mlp = MLP(self.model_dim // 2,
@@ -174,7 +178,7 @@ class BaseModel(_BaseModel):
     def build_spinn(self, args, vocab, predict_use_cell):
         return RLSPINN(args, vocab, predict_use_cell)
 
-    def forward_hook(self, embeds, batch_size, seq_length):
+    def forward_hook(self, embeds, batch_size, seq_length, h):
         if self.rl_baseline == "value" and self.training:
             # Break the computational graph.
             x = Variable(embeds.data, volatile=not self.training).view(
@@ -195,6 +199,18 @@ class BaseModel(_BaseModel):
                 volatile=not self.training)
             output, (hn, _) = self.v_rnn(x, (h0, c0))
             if self.use_sentence_pair:
+                hn = hn.squeeze()
+                h1, h2 = hn[:batch_size // 2], hn[batch_size // 2:]
+                hn_both = torch.cat([h1, h2], 1)
+                self.baseline_outp = self.v_mlp(hn_both.squeeze())
+            else:
+                self.baseline_outp = self.v_mlp(hn.squeeze())
+
+        elif self.rl_baseline == "shared" and self.training:
+            # Break the computational graph.
+            hn = h[0] # model_dim//2, batch_size
+            if self.use_sentence_pair:
+                # To-do: Not currently supported!!
                 hn = hn.squeeze()
                 h1, h2 = hn[:batch_size // 2], hn[batch_size // 2:]
                 hn_both = torch.cat([h1, h2], 1)
@@ -262,7 +278,8 @@ class BaseModel(_BaseModel):
 
             baseline = approx_rewards.view(-1)
 
-        elif self.rl_baseline == "value":
+        elif self.rl_baseline == "value" or \
+             self.rl_baseline == "shared":
             output = self.baseline_outp
             if self.rl_value_reward == "bce":
                 baseline = torch.sigmoid(output).view(-1)
@@ -277,24 +294,6 @@ class BaseModel(_BaseModel):
             else:
                 raise NotImplementedError
                 
-            baseline = baseline.data.cpu()
-
-        elif self.rl_baseline == "shared":
-            # Critic shares the actor's nework. 
-            # The two only differ in the final layer.
-            # NEEDS WORK
-            output = m_features
-            if self.rl_value_reward == "bce":
-                baseline = torch.sigmoid(output).view(-1)
-                self.value_loss = nn.BCELoss()(baseline, to_gpu(
-                    Variable(rewards, volatile=not self.training)))
-            elif self.rl_value_reward == "mse":
-                baseline = output.view(-1)
-                self.value_loss = nn.MSELoss()(baseline, to_gpu(
-                    Variable(rewards, volatile=not self.training)))
-            else:
-                raise NotImplementedError
-
             baseline = baseline.data.cpu()
 
         elif self.rl_baseline == "lbtree":
