@@ -321,6 +321,11 @@ def get_flags():
         False,
         "If True, add all tree internal/leaf nodes to the output of SPINN.")
     
+    gflags.DEFINE_boolean(
+        "rl_alternate",
+        False,
+        "If True, alternate between RL and MT loss backprop. (only supported for the MT classifier right now)")
+
     # Data settings.
     gflags.DEFINE_string("training_data_path", None, "")
     gflags.DEFINE_string("source_training_path", None, "MT source(SNLI format)")
