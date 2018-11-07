@@ -168,7 +168,7 @@ def eval_stats(model, A, eval_data):
     class_correct = A.get('class_correct')
     class_total = A.get('class_total')
     if sum(class_total)!=0:
-        class_acc = sum(class_correct) / float(sum(class_total))
+        class_acc = sum(class_correct).float() / float(sum(class_total))
     else:
         class_acc=0
     eval_data.eval_class_accuracy = class_acc

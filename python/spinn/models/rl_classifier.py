@@ -189,7 +189,6 @@ def train_loop(
 
     # Train.
     logger.Log("Training.")
-
     # New Training Loop
     progress_bar = SimpleProgressBar(
         msg="Training", bar_length=60, enabled=FLAGS.show_progress_bar)
@@ -253,7 +252,7 @@ def train_loop(
         # get the index of the max log-probability
         pred = output.data.max(1, keepdim=False)[1].cpu()
 
-        class_acc = pred.eq(target).sum() / float(target.size(0))
+        class_acc = pred.eq(target).sum().float() / float(target.size(0))
 
         # Calculate class loss.
         xent_loss = nn.CrossEntropyLoss()(output, to_gpu(Variable(target)))
