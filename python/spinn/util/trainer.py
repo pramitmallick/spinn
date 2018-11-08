@@ -38,7 +38,7 @@ class ModelTrainer(object):
         self.learning_rate_decay_when_no_progress = FLAGS.learning_rate_decay_when_no_progress
         self.training_data_length = None
         self.eval_interval_steps = FLAGS.eval_interval_steps
-        self.mt = FLAGS.data_type
+        self.mt = True if FLAGS.data_type == "mt" else False
 
         # GPU support.
         self.gpu = FLAGS.gpu
