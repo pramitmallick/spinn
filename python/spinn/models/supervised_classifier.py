@@ -138,7 +138,7 @@ def evaluate(FLAGS, model, eval_set, log_entry,
                 sent1_transitions,
                 sent2_transitions,
                 sent1_trees,
-                sent2_trees
+                sent2_trees,
                 mt=False)
 
         # Print Progress
