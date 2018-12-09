@@ -182,7 +182,7 @@ class NMTModel(nn.Module):
 
         # Below, model_dim is multiplied by 2 so that the output dimension is the same as the 
         # input word embedding dimension, and not half. 
-        # Look at TreeRNN for details (there is a down projection).
+        # Look at TreeRNN for details (there is a down #ion).
         if self.model_type == "RNN":
             self.is_bidirectional = True
             self.down_project = Linear()(2*self.model_dim, self.model_dim, bias=True)
@@ -258,7 +258,7 @@ class NMTModel(nn.Module):
             attended = attended.transpose(0,1)
             padded_enc_output = padded_enc_output.view(1, 2*batch_size, self.model_dim)
             attended = self.down_project(attended)
-            padded_enc_output = self.down_project_context(padded_enc_output)
+            # padded_enc_output = self.down_project_context(padded_enc_output)
         enc_state = self.decoder.init_decoder_state(src, attended, (padded_enc_output, padded_enc_output))
         
         teacher_force=False; padded_enc_output=None; enc_output=None; t_mask=None; tmp_target=None
