@@ -256,9 +256,9 @@ class NMTModel(nn.Module):
         else:
             src = example.bufs
             attended = attended.transpose(0,1)
-            padded_enc_output = padded_enc_output.view(1, 2*batch_size, self.model_dim)
+            padded_enc_output = padded_enc_output.view(1, batch_size, 2*self.model_dim)
             attended = self.down_project(attended)
-            # padded_enc_output = self.down_project_context(padded_enc_output)
+            padded_enc_output = self.down_project_context(padded_enc_output)
         enc_state = self.decoder.init_decoder_state(src, attended, (padded_enc_output, padded_enc_output))
         
         teacher_force=False; padded_enc_output=None; enc_output=None; t_mask=None; tmp_target=None
