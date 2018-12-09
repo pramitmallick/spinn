@@ -745,7 +745,7 @@ class BaseModel(nn.Module):
         self.transition_loss = transition_loss
         self.attention_h = attended
 
-        self.forward_hook(embeds, b, l, h)
+        #self.forward_hook(embeds, b, l, h)
 
         # Build features
         if self.data_type == "mt":
